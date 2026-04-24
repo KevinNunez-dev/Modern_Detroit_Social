@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SEO Dashboard — Modern Social Dentistry</title>
+  <title>SEO Dashboard — Modern Social Detroit</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
   <style>
@@ -42,7 +42,6 @@
       overflow-x: hidden;
     }
 
-    /* Ambient orbs */
     body::before {
       content:'';
       position:fixed; top:-200px; left:-200px;
@@ -60,7 +59,7 @@
 
     .container { max-width:1380px; margin:0 auto; position:relative; z-index:1; }
 
-    /* ── HEADER ── */
+    /* HEADER */
     header {
       display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
       background: var(--glass-bg);
@@ -90,7 +89,7 @@
       box-shadow: 0 0 20px var(--gold-glow);
     }
 
-    /* ── STAT CARDS ── */
+    /* STAT CARDS */
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -124,7 +123,6 @@
 
     .stat-icon {
       font-size: 22px; margin-bottom: 12px;
-      display:inline-block;
       background: var(--white-10);
       width:42px; height:42px; border-radius:10px;
       display:flex; align-items:center; justify-content:center;
@@ -156,7 +154,7 @@
       box-shadow: 0 0 8px var(--gold-glow);
     }
 
-    /* ── CHARTS ── */
+    /* CHARTS */
     .charts-grid {
       display: grid;
       grid-template-columns: 1fr 1.6fr;
@@ -194,7 +192,7 @@
     .legend-item { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--white-80); }
     .legend-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 
-    /* ── SECTION PROGRESS ── */
+    /* SECTION PROGRESS */
     .section-list { display:flex; flex-direction:column; gap:14px; }
     .section-row {}
     .section-meta {
@@ -202,10 +200,7 @@
       margin-bottom:6px;
     }
     .section-name { font-size:13px; font-weight:500; color:var(--white-80); }
-    .section-pct {
-      font-size:12px; font-weight:700;
-      color: var(--gold);
-    }
+    .section-pct { font-size:12px; font-weight:700; color: var(--gold); }
     .bar-track {
       width:100%; height:6px;
       background: rgba(255,255,255,0.08);
@@ -222,11 +217,11 @@
       font-size:10px; font-weight:600; padding:2px 8px;
       border-radius:20px; letter-spacing:0.4px;
     }
-    .s-done   { background:rgba(0,200,117,0.15); color:#00c875; }
-    .s-work   { background:rgba(253,171,61,0.15); color:#fdab3d; }
-    .s-pend   { background:rgba(255,255,255,0.08); color:var(--gray); }
+    .s-done { background:rgba(0,200,117,0.15); color:#00c875; }
+    .s-work { background:rgba(253,171,61,0.15); color:#fdab3d; }
+    .s-pend { background:rgba(255,255,255,0.08); color:var(--gray); }
 
-    /* ── TABLE ── */
+    /* TABLE */
     .table-wrap { overflow-x:auto; }
     table { width:100%; border-collapse:collapse; font-size:13px; }
     thead th {
@@ -251,14 +246,14 @@
       border-radius:20px; font-size:11px; font-weight:600;
       text-transform:uppercase; letter-spacing:0.4px;
     }
-    .b-done   { background:rgba(0,200,117,0.15); color:#00c875; border:1px solid rgba(0,200,117,0.25); }
-    .b-work   { background:rgba(253,171,61,0.15); color:#fdab3d; border:1px solid rgba(253,171,61,0.25); }
-    .b-pend   { background:rgba(255,255,255,0.06); color:var(--gray); border:1px solid rgba(255,255,255,0.1); }
+    .b-done { background:rgba(0,200,117,0.15); color:#00c875; border:1px solid rgba(0,200,117,0.25); }
+    .b-work { background:rgba(253,171,61,0.15); color:#fdab3d; border:1px solid rgba(253,171,61,0.25); }
+    .b-pend { background:rgba(255,255,255,0.06); color:var(--gray); border:1px solid rgba(255,255,255,0.1); }
 
     .task-name { font-weight:600; color:var(--white); }
     .section-tag { font-size:11px; color:var(--gray); }
 
-    /* ── FOOTER ── */
+    /* FOOTER */
     footer {
       text-align:center; margin-top:40px;
       font-size:12px; color:rgba(255,255,255,0.2);
@@ -266,7 +261,7 @@
     footer a { color:var(--gold); text-decoration:none; }
     footer a:hover { color:var(--gold-light); }
 
-    /* ── RESPONSIVE ── */
+    /* RESPONSIVE */
     @media(max-width:900px) {
       .charts-grid { grid-template-columns:1fr; }
     }
@@ -285,7 +280,7 @@
   <header>
     <div class="header-left">
       <h1>&#9679; SEO Audit Dashboard</h1>
-      <p>Modern Social Dentistry &nbsp;&#183;&nbsp; Board synced April 24, 2026 &nbsp;&#183;&nbsp; 40 Tasks Total</p>
+      <p>Modern Social Detroit &nbsp;&#183;&nbsp; Michigan's Premier Luxury Photo Booth &amp; Event Experience &nbsp;&#183;&nbsp; Synced April 24, 2026</p>
     </div>
     <div class="header-badge">PHL Digital Agency</div>
   </header>
@@ -296,13 +291,13 @@
       <div class="stat-icon">&#10003;</div>
       <div class="stat-label">Completed</div>
       <div class="stat-value">11</div>
-      <div class="stat-sub">of 40 tasks done</div>
+      <div class="stat-sub">of 40 total tasks done</div>
     </div>
     <div class="stat-card">
       <div class="stat-icon">&#9654;</div>
       <div class="stat-label">In Progress</div>
       <div class="stat-value">4</div>
-      <div class="stat-sub">actively being worked</div>
+      <div class="stat-sub">actively being worked on</div>
     </div>
     <div class="stat-card">
       <div class="stat-icon">&#9711;</div>
@@ -323,7 +318,6 @@
   <!-- CHARTS ROW -->
   <div class="charts-grid">
 
-    <!-- Doughnut -->
     <div class="glass-card">
       <div class="card-title"><span class="dot"></span>Status Breakdown</div>
       <canvas id="donutChart" height="220"></canvas>
@@ -334,7 +328,6 @@
       </div>
     </div>
 
-    <!-- Section progress -->
     <div class="glass-card">
       <div class="card-title"><span class="dot"></span>Completion by Section</div>
       <div class="section-list">
@@ -475,7 +468,7 @@
   </div>
 
   <footer>
-    <p>PHL Digital Agency &mdash; <a href="https://rptclinic.monday.com/boards/18407794764" target="_blank">View Monday.com Board</a> &mdash; Built with &#10084; for Modern Social Dentistry</p>
+    <p>PHL Digital Agency &mdash; Managing SEO for <a href="https://www.modernsocialdetroit.com" target="_blank">modernsocialdetroit.com</a> &mdash; <a href="https://rptclinic.monday.com/boards/18407794764" target="_blank">View Monday.com Board</a></p>
   </footer>
 
 </div>
