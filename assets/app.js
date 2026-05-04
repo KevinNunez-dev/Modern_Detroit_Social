@@ -8,9 +8,6 @@ const MONDAY_API = 'https://api.monday.com/v2';
 const AUTO_REFRESH_MS = 60000;
 
 // ── Status classification ────────────────────────────────────
-// Monday returns .text as the human-readable label (e.g. "Done", "Working on it")
-// OR it may return empty text with a numeric index in .value JSON.
-// We handle both paths.
 const DONE_LABELS    = ['done','complete','completed','finished','closed'];
 const WORKING_LABELS = ['working on it','in progress','working','started','in review','active'];
 const STUCK_LABELS   = ['stuck','blocked','on hold','waiting','paused'];
@@ -24,19 +21,14 @@ function classify(label) {
   return 'not_started';
 }
 
-// Extract label from Monday's column_value JSON.
-// Monday stores status as: {"index":1,"label":{"text":"Done"}}
-// OR the simple .text field is already populated.
+// Extract the human-readable label from a column_value.
+// Monday returns .text for most columns. For status columns the text IS the label.
 function extractLabel(col) {
   if (!col) return '';
-  // .text is the most reliable — Monday should populate this
   if (col.text && col.text.trim()) return col.text.trim();
-  // Fallback: parse .value JSON
   try {
     const v = JSON.parse(col.value || '{}');
-    // v.label.text  — newer API format
     if (v?.label?.text) return v.label.text;
-    // v.text         — older format
     if (v?.text)        return v.text;
   } catch {}
   return '';
@@ -180,20 +172,25 @@ async function fetchGroupItems(boardId, groupId) {
   return all;
 }
 
-// ── Pick status column ─────────────────────────────────────────
-// Collect ALL color-type columns and merge their labels.
-// This handles boards where the "Done" flag might be on a differently-named col.
+// ── Pick the status column ─────────────────────────────────────────
+// Monday's API returns type="status" for Status columns (NOT "color").
+// We also accept "color" as a legacy fallback just in case.
+const STATUS_TYPES    = ['status', 'color'];
 const STATUS_KEYWORDS = ['status','stage','completed','complete','task','progress','state','done'];
 
 function pickStatusCol(cols) {
-  // Priority 1: color col whose id matches a keyword
-  const byId = cols.find(c =>
-    c.type === 'color' &&
+  // 1. status/color type col whose id contains a keyword
+  const byKeyword = cols.find(c =>
+    STATUS_TYPES.includes(c.type) &&
     STATUS_KEYWORDS.some(k => c.id.toLowerCase().includes(k))
   );
-  if (byId) return byId;
-  // Priority 2: any color col at all
-  return cols.find(c => c.type === 'color') || null;
+  if (byKeyword) return byKeyword;
+
+  // 2. any status/color type col
+  const anyStatus = cols.find(c => STATUS_TYPES.includes(c.type));
+  if (anyStatus) return anyStatus;
+
+  return null;
 }
 
 // ── Main fetch ─────────────────────────────────────────────────
@@ -214,7 +211,7 @@ async function fetchBoard() {
 
     const groups   = board.groups || [];
     const allTasks = [];
-    let   loggedFirst = false;
+    let loggedFirst = false;
 
     for (const group of groups) {
       const items = await fetchGroupItems(BOARD_ID, group.id);
@@ -223,36 +220,28 @@ async function fetchBoard() {
         const sCol     = pickStatusCol(item.column_values);
         const rawLabel = extractLabel(sCol);
 
-        // ── DEBUG: dump ALL columns of first item so we can inspect ──
         if (!loggedFirst) {
           loggedFirst = true;
-          console.group('[MSD] First item column dump');
-          item.column_values.forEach(c =>
-            console.log(`  id=${c.id} | type=${c.type} | text="${c.text}" | value=${c.value}`)
-          );
-          console.log('Status col chosen:', sCol?.id, '| rawLabel:', rawLabel);
-          console.groupEnd();
+          console.log('[MSD] All columns:', item.column_values.map(c => `${c.id}(${c.type})="${c.text}"`).join(' | '));
+          console.log('[MSD] Status col:', sCol ? `${sCol.id}(${sCol.type}) label="${rawLabel}"` : 'NOT FOUND');
         }
 
-        const pCol     = item.column_values.find(c => c.type === 'people');
+        const pCol     = item.column_values.find(c => c.type === 'people' || c.type === 'multiple-person');
         const assignee = pCol ? (pCol.text || tryPeople(pCol.value)) : '—';
 
         allTasks.push({
           id: item.id, name: item.name,
           section: group.title,
-          rawLabel,   // ← what Monday actually sends
+          rawLabel,
           status: classify(rawLabel),
           assignee: assignee || '—'
         });
       });
     }
 
-    const doneCount = allTasks.filter(t => t.status === 'done').length;
-    console.log(`[MSD] ${allTasks.length} tasks | Done: ${doneCount} | Working: ${allTasks.filter(t=>t.status==='working').length} | Not started: ${allTasks.filter(t=>t.status==='not_started').length}`);
-
-    // ── Show a sample of raw labels so we can see what Monday returns
-    const sample = [...new Set(allTasks.map(t => `"${t.rawLabel}"`))];
-    console.log('[MSD] Unique raw labels found:', sample.join(', '));
+    const uniqueLabels = [...new Set(allTasks.map(t => t.rawLabel || '(empty)'))].join(', ');
+    console.log(`[MSD] ${allTasks.length} tasks | Done:${allTasks.filter(t=>t.status==='done').length} Working:${allTasks.filter(t=>t.status==='working').length} NotStarted:${allTasks.filter(t=>t.status==='not_started').length}`);
+    console.log('[MSD] Unique raw labels:', uniqueLabels);
 
     renderAll(allTasks, groups);
     window.__msdTasks = allTasks;
@@ -267,7 +256,7 @@ async function fetchBoard() {
   }
 }
 
-// ── Value parsers ──────────────────────────────────────────────
+// ── Value parsers ─────────────────────────────────────────
 function tryPeople(raw) {
   try {
     const v    = JSON.parse(raw);
@@ -276,7 +265,7 @@ function tryPeople(raw) {
   } catch { return ''; }
 }
 
-// ── Render all ─────────────────────────────────────────────────
+// ── Render ──────────────────────────────────────────────────────
 function renderAll(tasks, groups) {
   const done       = tasks.filter(t => t.status === 'done').length;
   const working    = tasks.filter(t => t.status === 'working').length;
@@ -302,32 +291,22 @@ function renderAll(tasks, groups) {
   taskCountEl.textContent = total + ' task' + (total !== 1 ? 's' : '');
 }
 
-// ── Donut ──────────────────────────────────────────────────────
 function renderDonut(done, working, stuck, ns) {
   const ctx    = $('donutChart').getContext('2d');
   const colors = ['#22c55e','#f59e0b','#ef4444','#6b7280'];
   const labels = ['Completed','In Progress','Stuck','Not Started'];
   const vals   = [done, working, stuck, ns];
-
   if (donutChartInstance) donutChartInstance.destroy();
   donutChartInstance = new Chart(ctx, {
     type: 'doughnut',
     data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }] },
-    options: {
-      cutout: '68%',
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => ` ${c.label}: ${c.parsed}` } }
-      }
-    }
+    options: { cutout: '68%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.label}: ${c.parsed}` } } } }
   });
-
-  donutLegendEl.innerHTML = labels.map((l, i) =>
+  donutLegendEl.innerHTML = labels.map((l,i) =>
     `<div class="legend-item"><span class="legend-dot" style="background:${colors[i]}"></span>${l} <strong>${vals[i]}</strong></div>`
   ).join('');
 }
 
-// ── Section bars ───────────────────────────────────────────────
 function renderSectionBars(groups, tasks) {
   sectionBarsEl.innerHTML = groups.map(g => {
     const gt  = tasks.filter(t => t.section === g.title);
@@ -340,7 +319,6 @@ function renderSectionBars(groups, tasks) {
   }).join('');
 }
 
-// ── Table ──────────────────────────────────────────────────────
 const BADGES = {
   done:        ['badge-done',        '✓ Done'],
   working:     ['badge-working',     '⚡ In Progress'],
@@ -352,11 +330,10 @@ function renderTable(tasks) {
   if (!tasks.length) { renderEmpty('No tasks found on this board.'); return; }
   tasksTableBody.innerHTML = tasks.map(t => {
     const [cls, lbl] = BADGES[t.status] || BADGES.not_started;
-    // rawLabel shown in tooltip so we can debug without console
-    return `<tr title="Raw Monday label: ${h(t.rawLabel || '(empty)')}">
+    return `<tr>
       <td>${h(t.name)}</td>
       <td><span class="section-tag">${h(t.section)}</span></td>
-      <td><span class="badge ${cls}" title="Monday says: ${h(t.rawLabel || 'empty')}">${lbl}</span></td>
+      <td><span class="badge ${cls}">${lbl}</span></td>
       <td>${h(t.assignee)}</td>
     </tr>`;
   }).join('');
@@ -381,7 +358,7 @@ function h(s) {
 exportBtn.addEventListener('click', () => {
   const tasks = window.__msdTasks || [];
   if (!tasks.length) { alert('No data to export yet.'); return; }
-  const rows = [['Task Name','Section','Status (Monday)','Classified As','Assigned To'],
+  const rows = [['Task Name','Section','Status (Monday)','Classified','Assigned To'],
     ...tasks.map(t => [t.name, t.section, t.rawLabel, t.status, t.assignee])];
   const csv  = rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
   const a    = Object.assign(document.createElement('a'), {
@@ -391,7 +368,7 @@ exportBtn.addEventListener('click', () => {
   a.click();
 });
 
-// ── Refresh + init ─────────────────────────────────────────────
+// ── Refresh + init ─────────────────────────────────────────
 refreshBtn.addEventListener('click', fetchBoard);
 
 document.addEventListener('DOMContentLoaded', () => {
