@@ -1,70 +1,71 @@
-/* =========================================================
+/* =============================================================
    Modern Social Detroit — SEO Audit Dashboard
-   Live Monday.com sync  |  Board 18407794764
-   ========================================================= */
+   Monday.com Live Sync  |  Board 18407794764
+   ============================================================= */
 
 const BOARD_ID = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
-const MONDAY_API_VERSION = '2024-01';
 
-// ── Status label helpers ──────────────────────────────────
-const STATUS_DONE        = ['done', 'complete', 'completed', 'finished'];
-const STATUS_WORKING     = ['working on it', 'in progress', 'working', 'started'];
-const STATUS_STUCK       = ['stuck', 'blocked', 'on hold'];
+// ── Status classification ────────────────────────────────────
+const DONE_LABELS     = ['done', 'complete', 'completed', 'finished'];
+const WORKING_LABELS  = ['working on it', 'in progress', 'working', 'started', 'in review'];
+const STUCK_LABELS    = ['stuck', 'blocked', 'on hold', 'waiting'];
 
 function classify(label) {
   const v = (label || '').toLowerCase().trim();
-  if (STATUS_DONE.includes(v))    return 'done';
-  if (STATUS_WORKING.includes(v)) return 'working';
-  if (STATUS_STUCK.includes(v))   return 'stuck';
+  if (DONE_LABELS.includes(v))    return 'done';
+  if (WORKING_LABELS.includes(v)) return 'working';
+  if (STUCK_LABELS.includes(v))   return 'stuck';
   return 'not_started';
 }
 
-// ── Token storage ─────────────────────────────────────────
-function getToken()   { return localStorage.getItem('msd_monday_token') || ''; }
-function saveToken(t) { localStorage.setItem('msd_monday_token', t); }
-function clearToken() { localStorage.removeItem('msd_monday_token'); }
+// ── Token ─────────────────────────────────────────────────
+const LS_KEY = 'msd_monday_token';
+function getToken()   { return localStorage.getItem(LS_KEY) || ''; }
+function saveToken(t) { localStorage.setItem(LS_KEY, t.trim()); }
+function clearToken() { localStorage.removeItem(LS_KEY); }
 
-// ── DOM refs ──────────────────────────────────────────────
-const syncPill       = document.getElementById('syncPill');
-const syncStatusEl   = document.getElementById('syncStatus');
-const refreshBtn     = document.getElementById('refreshBtn');
-const refreshIcon    = document.getElementById('refreshIcon');
-const exportBtn      = document.getElementById('exportBtn');
-const settingsBtn    = document.getElementById('settingsBtn');
-const drawer         = document.getElementById('settingsDrawer');
-const drawerOverlay  = document.getElementById('drawerOverlay');
-const drawerCloseBtn = document.getElementById('drawerCloseBtn');
-const tokenInput     = document.getElementById('tokenInput');
-const saveTokenBtn   = document.getElementById('saveTokenBtn');
-const clearTokenBtn  = document.getElementById('clearTokenBtn');
-const tasksTableBody = document.getElementById('tasksTableBody');
-const taskCountEl    = document.getElementById('taskCount');
-const sectionBarsEl  = document.getElementById('sectionBars');
-const donutLegendEl  = document.getElementById('donutLegend');
+// ── DOM ──────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
 
-const statCompleted  = document.getElementById('statCompleted');
-const statInProgress = document.getElementById('statInProgress');
-const statNotStarted = document.getElementById('statNotStarted');
-const statPercent    = document.getElementById('statPercent');
-const barCompleted   = document.getElementById('barCompleted');
-const barInProgress  = document.getElementById('barInProgress');
-const barNotStarted  = document.getElementById('barNotStarted');
-const barPercent     = document.getElementById('barPercent');
+const syncPill       = $('syncPill');
+const syncStatusEl   = $('syncStatus');
+const refreshBtn     = $('refreshBtn');
+const refreshIcon    = $('refreshIcon');
+const exportBtn      = $('exportBtn');
+const settingsBtn    = $('settingsBtn');
+const drawer         = $('settingsDrawer');
+const drawerOverlay  = $('drawerOverlay');
+const drawerCloseBtn = $('drawerCloseBtn');
+const tokenInput     = $('tokenInput');
+const saveTokenBtn   = $('saveTokenBtn');
+const clearTokenBtn  = $('clearTokenBtn');
+const tasksTableBody = $('tasksTableBody');
+const taskCountEl    = $('taskCount');
+const sectionBarsEl  = $('sectionBars');
+const donutLegendEl  = $('donutLegend');
+const statCompleted  = $('statCompleted');
+const statInProgress = $('statInProgress');
+const statNotStarted = $('statNotStarted');
+const statPercent    = $('statPercent');
+const barCompleted   = $('barCompleted');
+const barInProgress  = $('barInProgress');
+const barNotStarted  = $('barNotStarted');
+const barPercent     = $('barPercent');
 
 let donutChartInstance = null;
 
-// ── Settings drawer ───────────────────────────────────────
-function openDrawer()  { drawer.classList.add('open'); drawerOverlay.classList.add('open'); }
+// ── Drawer ───────────────────────────────────────────────
+function openDrawer()  { drawer.classList.add('open');    drawerOverlay.classList.add('open'); }
 function closeDrawer() { drawer.classList.remove('open'); drawerOverlay.classList.remove('open'); }
 
-settingsBtn.addEventListener('click', () => { tokenInput.value = getToken(); openDrawer(); });
+settingsBtn.addEventListener('click',  () => { tokenInput.value = getToken(); openDrawer(); });
 drawerCloseBtn.addEventListener('click', closeDrawer);
-drawerOverlay.addEventListener('click', closeDrawer);
+drawerOverlay.addEventListener('click',  closeDrawer);
 
 saveTokenBtn.addEventListener('click', () => {
   const t = tokenInput.value.trim();
-  if (!t) { alert('Please paste your Monday API token first.'); return; }
+  if (!t) { alert('Paste your Monday API token first.'); return; }
   saveToken(t);
   closeDrawer();
   fetchBoard();
@@ -73,179 +74,167 @@ saveTokenBtn.addEventListener('click', () => {
 clearTokenBtn.addEventListener('click', () => {
   clearToken();
   tokenInput.value = '';
-  setSyncState('error', 'Token cleared');
+  setSyncState('error', 'Token cleared — open ⚙️ to reconnect');
+  renderEmpty('Token cleared. Click ⚙️ Settings to reconnect.');
 });
 
-// ── Sync pill ────────────────────────────────────────────
+// ── Pill state ────────────────────────────────────────────
 function setSyncState(state, label) {
   syncPill.className = 'sync-pill sync-' + state;
-  const time = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  if (syncStatusEl) syncStatusEl.textContent = label + ' ' + time;
+  const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  syncStatusEl.textContent = label + ' · ' + t;
 }
 
-// ── Spinner ───────────────────────────────────────────────
 function setSpinner(on) {
   refreshIcon.style.animation = on ? 'spin 0.8s linear infinite' : '';
   refreshBtn.disabled = on;
 }
 
-// ── GraphQL — plain column_values, no inline fragments ───────
-const GQL_QUERY = `
-  query GetBoard($boardId: [ID!]!) {
-    boards(ids: $boardId) {
-      name
-      groups {
-        id
-        title
-        items_page(limit: 500) {
-          items {
-            id
-            name
-            column_values {
-              id
-              text
-              type
-              value
-            }
-          }
+// ── GQL query (2024-01 schema with items_page) ──────────────
+const QUERY = `
+query GetBoard($ids: [ID!]!) {
+  boards(ids: $ids) {
+    name
+    groups {
+      id
+      title
+      items_page(limit: 500) {
+        items {
+          id
+          name
+          column_values { id type text value }
         }
       }
     }
   }
-`;
+}`;
 
+// ── Fetch ─────────────────────────────────────────────────
 async function fetchBoard() {
   const token = getToken();
   if (!token) {
-    setSyncState('error', 'No token — open ⚙️');
-    renderEmpty('Click ⚙️ Settings and paste your Monday API token to load tasks.');
+    setSyncState('error', 'No token');
+    renderEmpty('Click ⚙️ Settings and paste your Monday API token.');
     return;
   }
 
   setSpinner(true);
-  setSyncState('loading', 'Syncing...');
-  console.log('[MSD] Fetching board', BOARD_ID);
+  setSyncState('loading', 'Syncing');
+  console.log('[MSD] Requesting board', BOARD_ID);
 
   try {
     const res = await fetch(MONDAY_API, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // Monday accepts both bare token and "Bearer <token>" — we send both formats via one header
-        'Authorization': token.startsWith('Bearer ') ? token : token,
-        'API-Version': MONDAY_API_VERSION
+        'Authorization': token,          // Monday personal token: no Bearer prefix
+        'API-Version':   '2024-01'       // required for items_page
       },
-      body: JSON.stringify({
-        query: GQL_QUERY,
-        variables: { boardId: [BOARD_ID] }
-      })
+      body: JSON.stringify({ query: QUERY, variables: { ids: [BOARD_ID] } })
     });
 
-    console.log('[MSD] HTTP status:', res.status);
+    const raw = await res.text();
+    console.log('[MSD] HTTP', res.status, '|', raw.slice(0, 600));
+
     if (!res.ok) {
-      const errText = await res.text();
-      console.error('[MSD] HTTP error body:', errText);
-      throw new Error('HTTP ' + res.status + ' — ' + errText.slice(0, 120));
+      throw new Error('HTTP ' + res.status + ': ' + raw.slice(0, 200));
     }
 
-    const json = await res.json();
-    console.log('[MSD] API response:', JSON.stringify(json).slice(0, 500));
+    let json;
+    try { json = JSON.parse(raw); }
+    catch (e) { throw new Error('Bad JSON from Monday: ' + raw.slice(0, 200)); }
 
-    if (json.errors && json.errors.length) {
-      throw new Error(json.errors.map(e => e.message).join('; '));
+    if (json.errors?.length) {
+      throw new Error(json.errors.map(e => e.message).join(' | '));
+    }
+    if (json.error_code) {
+      throw new Error(json.error_code + ': ' + (json.error_message || json.status_code));
     }
 
-    const boards = json.data?.boards;
-    if (!boards || !boards.length) {
-      throw new Error('No board returned — check board ID or token permissions.');
-    }
+    const board = json.data?.boards?.[0];
+    if (!board) throw new Error('No board data returned. Check board ID and token permissions.');
 
-    processBoard(boards[0]);
+    processBoard(board);
     setSyncState('live', 'Synced');
-    console.log('[MSD] Sync complete');
+    console.log('[MSD] Done');
+
   } catch (err) {
-    console.error('[MSD] Fetch error:', err.message);
-    setSyncState('error', 'Failed — see console');
-    renderEmpty('⚠️ Sync failed: ' + err.message + '<br><small>Open DevTools → Console for details.</small>');
+    console.error('[MSD] Error:', err.message);
+    setSyncState('error', 'Sync failed');
+    renderError(err.message);
   } finally {
     setSpinner(false);
   }
 }
 
-// ── Parse column_values.value (JSON string) to get label/people ──
-function parseColValue(col) {
-  try { return JSON.parse(col.value || 'null'); } catch { return null; }
+// ── Parse column value ──────────────────────────────────────
+function parseVal(col) {
+  try { return JSON.parse(col.value); } catch { return null; }
 }
 
-function getStatusLabel(col) {
-  // col.text is the most reliable for status columns
+function getStatusText(col) {
   if (col.text) return col.text;
-  const v = parseColValue(col);
-  if (v && typeof v.label === 'string') return v.label;
-  if (v && typeof v.text  === 'string') return v.text;
-  return '';
+  const v = parseVal(col);
+  return v?.label || v?.text || '';
 }
 
-function getPeopleNames(col) {
-  const v = parseColValue(col);
-  if (!v) return '';
-  // v.personsAndTeams or v.persons_and_teams
+function getAssigneeText(col) {
+  const v = parseVal(col);
+  if (!v) return col.text || '';
   const list = v.personsAndTeams || v.persons_and_teams || [];
-  return list.map(p => p.name || p.id).join(', ');
+  return list.map(p => p.name || p.id).filter(Boolean).join(', ');
 }
 
-// ── Process board data ────────────────────────────────────
+// ── Process ────────────────────────────────────────────────
 function processBoard(board) {
-  const allTasks = [];
+  const tasks = [];
 
-  board.groups.forEach(group => {
-    (group.items_page?.items || []).forEach(item => {
-      // Status: find first status-type column, fall back to col named "status"
-      const statusCol = item.column_values.find(c =>
+  board.groups.forEach(g => {
+    (g.items_page?.items || []).forEach(item => {
+      // Pick first status-type column
+      const sCols = item.column_values.filter(c =>
         c.type === 'color' ||
         c.id.toLowerCase().includes('status') ||
         c.id.toLowerCase().includes('stage')
-      ) || item.column_values[0];
+      );
+      const sCol     = sCols[0] || null;
+      const rawLabel = sCol ? getStatusText(sCol) : '';
 
-      const rawLabel = statusCol ? getStatusLabel(statusCol) : '';
+      // Pick first people-type column
+      const pCol    = item.column_values.find(c => c.type === 'people');
+      const assignee = pCol ? (getAssigneeText(pCol) || '—') : '—';
 
-      // People: find first people-type column
-      const peopleCol = item.column_values.find(c => c.type === 'people');
-      const assignee  = peopleCol ? (getPeopleNames(peopleCol) || peopleCol.text || '—') : '—';
-
-      allTasks.push({
-        id:       item.id,
-        name:     item.name,
-        section:  group.title,
-        rawLabel,
-        status:   classify(rawLabel),
-        assignee
+      tasks.push({
+        id: item.id, name: item.name,
+        section: g.title, rawLabel,
+        status: classify(rawLabel), assignee
       });
     });
   });
 
-  console.log('[MSD] Tasks loaded:', allTasks.length);
-  renderAll(allTasks, board.groups);
-  window.__msdTasks = allTasks;
+  console.log('[MSD] Tasks:', tasks.length);
+  renderAll(tasks, board.groups);
+  window.__msdTasks = tasks;
 }
 
-// ── Render all ────────────────────────────────────────────
+// ── Render all ─────────────────────────────────────────────
 function renderAll(tasks, groups) {
   const done       = tasks.filter(t => t.status === 'done').length;
   const working    = tasks.filter(t => t.status === 'working').length;
   const stuck      = tasks.filter(t => t.status === 'stuck').length;
   const notStarted = tasks.filter(t => t.status === 'not_started').length;
   const total      = tasks.length;
-  const pct        = total ? Math.round((done / total) * 100) : 0;
+  const pct        = total ? Math.round(done / total * 100) : 0;
 
   statCompleted.textContent  = done;
   statInProgress.textContent = working;
   statNotStarted.textContent = notStarted;
   statPercent.textContent    = pct + '%';
 
-  barCompleted.style.width  = total ? (done  / total * 100) + '%' : '0%';
-  barInProgress.style.width = total ? (working / total * 100) + '%' : '0%';
-  barNotStarted.style.width = total ? (notStarted / total * 100) + '%' : '0%';
+  const w = v => total ? (v / total * 100).toFixed(1) + '%' : '0%';
+  barCompleted.style.width  = w(done);
+  barInProgress.style.width = w(working);
+  barNotStarted.style.width = w(notStarted);
   barPercent.style.width    = pct + '%';
 
   renderDonut(done, working, stuck, notStarted);
@@ -254,20 +243,17 @@ function renderAll(tasks, groups) {
   taskCountEl.textContent = total + ' task' + (total !== 1 ? 's' : '');
 }
 
-// ── Donut chart ───────────────────────────────────────────
-function renderDonut(done, working, stuck, notStarted) {
-  const ctx    = document.getElementById('donutChart').getContext('2d');
-  const colors = ['#22c55e', '#f59e0b', '#ef4444', '#6b7280'];
-  const labels = ['Completed', 'In Progress', 'Stuck', 'Not Started'];
-  const values = [done, working, stuck, notStarted];
+// ── Donut ─────────────────────────────────────────────────
+function renderDonut(done, working, stuck, ns) {
+  const ctx    = $('donutChart').getContext('2d');
+  const colors = ['#22c55e','#f59e0b','#ef4444','#6b7280'];
+  const labels = ['Completed','In Progress','Stuck','Not Started'];
+  const vals   = [done, working, stuck, ns];
 
   if (donutChartInstance) donutChartInstance.destroy();
   donutChartInstance = new Chart(ctx, {
     type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{ data: values, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }]
-    },
+    data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0, hoverOffset: 6 }] },
     options: {
       cutout: '68%',
       plugins: {
@@ -278,78 +264,88 @@ function renderDonut(done, working, stuck, notStarted) {
   });
 
   donutLegendEl.innerHTML = labels.map((l, i) =>
-    `<div class="legend-item"><span class="legend-dot" style="background:${colors[i]}"></span>${l} <strong>${values[i]}</strong></div>`
+    `<div class="legend-item"><span class="legend-dot" style="background:${colors[i]}"></span>${l} <strong>${vals[i]}</strong></div>`
   ).join('');
 }
 
 // ── Section bars ──────────────────────────────────────────
 function renderSectionBars(groups, tasks) {
   sectionBarsEl.innerHTML = groups.map(g => {
-    const gTasks = tasks.filter(t => t.section === g.title);
-    const gDone  = gTasks.filter(t => t.status === 'done').length;
-    const gTotal = gTasks.length;
-    const gPct   = gTotal ? Math.round((gDone / gTotal) * 100) : 0;
-    return `
-      <div class="section-bar-row">
-        <div class="section-bar-label"><span>${g.title}</span><span>${gDone}/${gTotal}</span></div>
-        <div class="section-bar-track"><div class="section-bar-fill" style="width:${gPct}%"></div></div>
-      </div>`;
+    const gt  = tasks.filter(t => t.section === g.title);
+    const gd  = gt.filter(t => t.status === 'done').length;
+    const pct = gt.length ? Math.round(gd / gt.length * 100) : 0;
+    return `<div class="section-bar-row">
+      <div class="section-bar-label"><span>${g.title}</span><span>${gd}/${gt.length}</span></div>
+      <div class="section-bar-track"><div class="section-bar-fill" style="width:${pct}%"></div></div>
+    </div>`;
   }).join('');
 }
 
 // ── Table ─────────────────────────────────────────────────
-const BADGE = {
-  done:        { cls: 'badge-done',        label: '✓ Done' },
-  working:     { cls: 'badge-working',     label: '⚡ In Progress' },
-  stuck:       { cls: 'badge-stuck',       label: '🚫 Stuck' },
-  not_started: { cls: 'badge-not-started', label: '○ Not Started' }
+const BADGES = {
+  done:        ['badge-done',        '✓ Done'],
+  working:     ['badge-working',     '⚡ In Progress'],
+  stuck:       ['badge-stuck',       '🚫 Stuck'],
+  not_started: ['badge-not-started', '○ Not Started']
 };
 
 function renderTable(tasks) {
   if (!tasks.length) { renderEmpty('No tasks found on this board.'); return; }
   tasksTableBody.innerHTML = tasks.map(t => {
-    const b = BADGE[t.status] || BADGE.not_started;
+    const [cls, lbl] = BADGES[t.status] || BADGES.not_started;
     return `<tr>
-      <td>${escHtml(t.name)}</td>
-      <td><span class="section-tag">${escHtml(t.section)}</span></td>
-      <td><span class="badge ${b.cls}">${b.label}</span></td>
-      <td>${escHtml(t.assignee)}</td>
+      <td>${h(t.name)}</td>
+      <td><span class="section-tag">${h(t.section)}</span></td>
+      <td><span class="badge ${cls}">${lbl}</span></td>
+      <td>${h(t.assignee)}</td>
     </tr>`;
   }).join('');
+}
+
+function h(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function renderEmpty(msg) {
   tasksTableBody.innerHTML = `<tr><td colspan="4" class="empty-state">${msg}</td></tr>`;
 }
 
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function renderError(msg) {
+  tasksTableBody.innerHTML = `
+    <tr><td colspan="4" class="empty-state error-state">
+      <strong>⚠️ Sync Error</strong><br>
+      <code style="font-size:12px;word-break:break-all;">${h(msg)}</code><br><br>
+      <small>Steps to fix:<br>
+      1. Open ⚙️ Settings → paste your token from
+      <a href="https://rptclinic.monday.com/apps/manage/tokens" target="_blank" rel="noreferrer">monday.com/apps/manage/tokens</a><br>
+      2. Make sure your token has <strong>boards:read</strong> permission<br>
+      3. Open DevTools (F12) → Console for full details</small>
+    </td></tr>`;
 }
 
-// ── Export CSV ────────────────────────────────────────────
+// ── CSV export ───────────────────────────────────────────
 exportBtn.addEventListener('click', () => {
   const tasks = window.__msdTasks || [];
   if (!tasks.length) { alert('No data to export yet.'); return; }
-  const rows = [['Task Name', 'Section', 'Status', 'Assigned To']];
-  tasks.forEach(t => rows.push([t.name, t.section, t.rawLabel || t.status, t.assignee]));
-  const csv  = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: 'msd-seo-audit.csv' });
+  const rows = [['Task Name','Section','Status','Assigned To'],
+    ...tasks.map(t => [t.name, t.section, t.rawLabel || t.status, t.assignee])];
+  const csv  = rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
+  const a    = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+    download: 'msd-seo-audit.csv'
+  });
   a.click();
-  URL.revokeObjectURL(url);
 });
 
-// ── Refresh & init ─────────────────────────────────────────
+// ── Refresh ─────────────────────────────────────────────────
 refreshBtn.addEventListener('click', fetchBoard);
 
+// ── Init ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (getToken()) {
     fetchBoard();
   } else {
-    setSyncState('error', 'No token — open ⚙️');
+    setSyncState('error', 'No token');
     renderEmpty('Click ⚙️ Settings and paste your Monday API token to load tasks.');
   }
 });
