@@ -5,20 +5,19 @@
 
 const BOARD_ID   = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
-const AUTO_REFRESH_MS = 60000; // auto-refresh every 60 seconds
+const AUTO_REFRESH_MS = 60000;
 
 // ── Status classification ────────────────────────────────────
-// Matches Monday's exact label text (case-insensitive)
-const DONE_LABELS    = ['done', 'complete', 'completed', 'finished', 'closed'];
-const WORKING_LABELS = ['working on it', 'in progress', 'working', 'started', 'in review', 'active'];
-const STUCK_LABELS   = ['stuck', 'blocked', 'on hold', 'waiting', 'paused'];
+const DONE_LABELS    = ['done','complete','completed','finished','closed'];
+const WORKING_LABELS = ['working on it','in progress','working','started','in review','active'];
+const STUCK_LABELS   = ['stuck','blocked','on hold','waiting','paused'];
 
 function classify(label) {
   const v = (label || '').toLowerCase().trim();
   if (!v) return 'not_started';
-  if (DONE_LABELS.some(d => v === d || v.includes(d)))    return 'done';
-  if (WORKING_LABELS.some(w => v === w || v.includes(w))) return 'working';
-  if (STUCK_LABELS.some(s => v === s || v.includes(s)))   return 'stuck';
+  if (DONE_LABELS.some(d    => v === d || v.includes(d)))    return 'done';
+  if (WORKING_LABELS.some(w => v === w || v.includes(w)))  return 'working';
+  if (STUCK_LABELS.some(s   => v === s || v.includes(s)))  return 'stuck';
   return 'not_started';
 }
 
@@ -87,7 +86,6 @@ clearTokenBtn.addEventListener('click', () => {
 function startAutoRefresh() {
   stopAutoRefresh();
   autoRefreshTimer = setInterval(fetchBoard, AUTO_REFRESH_MS);
-  console.log('[MSD] Auto-refresh every', AUTO_REFRESH_MS / 1000, 'seconds');
 }
 function stopAutoRefresh() {
   if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
@@ -99,7 +97,6 @@ function setSyncState(state, label) {
   const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   syncStatusEl.textContent = label + ' · ' + t;
 }
-
 function setSpinner(on) {
   refreshIcon.style.animation = on ? 'spin 0.8s linear infinite' : '';
   refreshBtn.disabled = on;
@@ -120,7 +117,7 @@ function gqlRequest(query, variables = {}) {
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); } catch { throw new Error('Non-JSON: ' + text.slice(0, 200)); }
-    if (json.error_code)    throw new Error(json.error_code + ': ' + (json.error_message || ''));
+    if (json.error_code)     throw new Error(json.error_code + ': ' + (json.error_message || ''));
     if (json.errors?.length) throw new Error(json.errors.map(e => e.message).join(' | '));
     return json.data;
   });
@@ -135,6 +132,7 @@ query Groups($ids: [ID!]!) {
   }
 }`;
 
+// NOTE: column_values only supports: id, type, text, value — NOT title
 const ITEMS_QUERY = `
 query Items($boardId: ID!, $groupId: String!, $cursor: String) {
   boards(ids: [$boardId]) {
@@ -143,7 +141,7 @@ query Items($boardId: ID!, $groupId: String!, $cursor: String) {
         cursor
         items {
           id name
-          column_values { id title type text value }
+          column_values { id type text value }
         }
       }
     }
@@ -162,34 +160,22 @@ async function fetchGroupItems(boardId, groupId) {
   return all;
 }
 
-// ── Pick the best status column from an item ──────────────────
-// Monday boards can name the status column anything.
-// Strategy: prefer 'color' type columns, then fall back to any
-// column whose ID or title contains known keywords.
-const STATUS_KEYWORDS = ['status','stage','completed','complete','task','progress','state'];
+// ── Pick the best status column ───────────────────────────────
+// Monday column IDs are slugified versions of the column name.
+// "Completed Task" becomes something like "completed_task" or "status"
+// Strategy: color-type col whose id contains a status keyword, else any color col.
+const STATUS_ID_KEYWORDS = ['status','stage','completed','complete','task','progress','state','done'];
 
 function pickStatusCol(cols) {
-  // 1. First color-type column whose title/id suggests status
-  const byKeyword = cols.filter(c =>
+  // 1. color-type col with a keyword in its ID
+  const match = cols.find(c =>
     c.type === 'color' &&
-    STATUS_KEYWORDS.some(k =>
-      c.id.toLowerCase().includes(k) ||
-      (c.title || '').toLowerCase().includes(k)
-    )
+    STATUS_ID_KEYWORDS.some(k => c.id.toLowerCase().includes(k))
   );
-  if (byKeyword.length) return byKeyword[0];
+  if (match) return match;
 
-  // 2. Any color-type column
-  const anyColor = cols.find(c => c.type === 'color');
-  if (anyColor) return anyColor;
-
-  // 3. Any column whose title matches keywords
-  return cols.find(c =>
-    STATUS_KEYWORDS.some(k =>
-      c.id.toLowerCase().includes(k) ||
-      (c.title || '').toLowerCase().includes(k)
-    )
-  ) || null;
+  // 2. any color-type col (Monday status columns are always type=color)
+  return cols.find(c => c.type === 'color') || null;
 }
 
 // ── Main fetch ────────────────────────────────────────────
@@ -210,6 +196,7 @@ async function fetchBoard() {
 
     const groups   = board.groups || [];
     const allTasks = [];
+    let   firstItemLogged = false;
 
     for (const group of groups) {
       const items = await fetchGroupItems(BOARD_ID, group.id);
@@ -218,15 +205,15 @@ async function fetchBoard() {
         const sCol     = pickStatusCol(item.column_values);
         const rawLabel = sCol ? (sCol.text || tryLabel(sCol.value)) : '';
 
-        // Log first item of first group so we can see what columns are available
-        if (allTasks.length === 0) {
-          console.log('[MSD] First item columns:', item.column_values.map(c =>
-            `${c.id}(${c.type}): title="${c.title}" text="${c.text}"`
-          ).join(' | '));
-          console.log('[MSD] Picked status col:', sCol ? `${sCol.id} text="${sCol.text}"` : 'NONE');
+        // Debug: log column map for first item only
+        if (!firstItemLogged && item.column_values.length) {
+          firstItemLogged = true;
+          console.log('[MSD] Columns on first item:',
+            item.column_values.map(c => `${c.id}(${c.type})="${c.text}"`).join(' | '));
+          console.log('[MSD] Status col picked:', sCol ? `${sCol.id} text="${sCol.text}"` : 'NONE — no color col found');
         }
 
-        const pCol    = item.column_values.find(c => c.type === 'people');
+        const pCol     = item.column_values.find(c => c.type === 'people');
         const assignee = pCol ? (pCol.text || tryPeople(pCol.value)) : '—';
 
         allTasks.push({
@@ -238,16 +225,17 @@ async function fetchBoard() {
       });
     }
 
-    console.log('[MSD] Tasks:', allTasks.length,
-      '| Done:', allTasks.filter(t=>t.status==='done').length,
-      '| Working:', allTasks.filter(t=>t.status==='working').length);
+    console.log('[MSD] Total tasks:', allTasks.length,
+      '| Done:', allTasks.filter(t => t.status === 'done').length,
+      '| Working:', allTasks.filter(t => t.status === 'working').length,
+      '| Not started:', allTasks.filter(t => t.status === 'not_started').length);
 
     renderAll(allTasks, groups);
     window.__msdTasks = allTasks;
     setSyncState('live', 'Synced');
 
   } catch (err) {
-    console.error('[MSD] Error:', err.message);
+    console.error('[MSD] Fetch error:', err.message);
     setSyncState('error', 'Sync failed');
     renderError(err.message);
   } finally {
@@ -367,7 +355,7 @@ function h(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── CSV ─────────────────────────────────────────────────
+// ── CSV export ───────────────────────────────────────────
 exportBtn.addEventListener('click', () => {
   const tasks = window.__msdTasks || [];
   if (!tasks.length) { alert('No data to export yet.'); return; }
