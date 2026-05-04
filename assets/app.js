@@ -5,17 +5,20 @@
 
 const BOARD_ID   = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
+const AUTO_REFRESH_MS = 60000; // auto-refresh every 60 seconds
 
 // ── Status classification ────────────────────────────────────
-const DONE_LABELS    = ['done','complete','completed','finished'];
-const WORKING_LABELS = ['working on it','in progress','working','started','in review'];
-const STUCK_LABELS   = ['stuck','blocked','on hold','waiting'];
+// Matches Monday's exact label text (case-insensitive)
+const DONE_LABELS    = ['done', 'complete', 'completed', 'finished', 'closed'];
+const WORKING_LABELS = ['working on it', 'in progress', 'working', 'started', 'in review', 'active'];
+const STUCK_LABELS   = ['stuck', 'blocked', 'on hold', 'waiting', 'paused'];
 
 function classify(label) {
   const v = (label || '').toLowerCase().trim();
-  if (DONE_LABELS.includes(v))    return 'done';
-  if (WORKING_LABELS.includes(v)) return 'working';
-  if (STUCK_LABELS.includes(v))   return 'stuck';
+  if (!v) return 'not_started';
+  if (DONE_LABELS.some(d => v === d || v.includes(d)))    return 'done';
+  if (WORKING_LABELS.some(w => v === w || v.includes(w))) return 'working';
+  if (STUCK_LABELS.some(s => v === s || v.includes(s)))   return 'stuck';
   return 'not_started';
 }
 
@@ -53,6 +56,7 @@ const barNotStarted  = $('barNotStarted');
 const barPercent     = $('barPercent');
 
 let donutChartInstance = null;
+let autoRefreshTimer   = null;
 
 // ── Drawer ───────────────────────────────────────────────
 function openDrawer()  { drawer.classList.add('open');    drawerOverlay.classList.add('open'); }
@@ -67,15 +71,27 @@ saveTokenBtn.addEventListener('click', () => {
   if (!t) { alert('Paste your Monday API token first.'); return; }
   saveToken(t);
   closeDrawer();
+  startAutoRefresh();
   fetchBoard();
 });
 
 clearTokenBtn.addEventListener('click', () => {
   clearToken();
+  stopAutoRefresh();
   tokenInput.value = '';
   setSyncState('error', 'Token cleared');
   renderEmpty('Token cleared. Click ⚙️ Settings to reconnect.');
 });
+
+// ── Auto-refresh ──────────────────────────────────────────
+function startAutoRefresh() {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(fetchBoard, AUTO_REFRESH_MS);
+  console.log('[MSD] Auto-refresh every', AUTO_REFRESH_MS / 1000, 'seconds');
+}
+function stopAutoRefresh() {
+  if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
+}
 
 // ── Pill ──────────────────────────────────────────────────
 function setSyncState(state, label) {
@@ -89,7 +105,7 @@ function setSpinner(on) {
   refreshBtn.disabled = on;
 }
 
-// ── GQL helpers ───────────────────────────────────────────
+// ── GQL helper ───────────────────────────────────────────
 function gqlRequest(query, variables = {}) {
   return fetch(MONDAY_API, {
     method: 'POST',
@@ -104,13 +120,13 @@ function gqlRequest(query, variables = {}) {
     const text = await res.text();
     let json;
     try { json = JSON.parse(text); } catch { throw new Error('Non-JSON: ' + text.slice(0, 200)); }
-    if (json.error_code) throw new Error(json.error_code + ': ' + (json.error_message || ''));
+    if (json.error_code)    throw new Error(json.error_code + ': ' + (json.error_message || ''));
     if (json.errors?.length) throw new Error(json.errors.map(e => e.message).join(' | '));
     return json.data;
   });
 }
 
-// ── Step 1: fetch groups only (very cheap query) ──────────────
+// ── Queries ───────────────────────────────────────────────
 const GROUPS_QUERY = `
 query Groups($ids: [ID!]!) {
   boards(ids: $ids) {
@@ -119,7 +135,6 @@ query Groups($ids: [ID!]!) {
   }
 }`;
 
-// ── Step 2: fetch items for ONE group at a time (low complexity) ─
 const ITEMS_QUERY = `
 query Items($boardId: ID!, $groupId: String!, $cursor: String) {
   boards(ids: [$boardId]) {
@@ -128,7 +143,7 @@ query Items($boardId: ID!, $groupId: String!, $cursor: String) {
         cursor
         items {
           id name
-          column_values { id type text value }
+          column_values { id title type text value }
         }
       }
     }
@@ -136,18 +151,45 @@ query Items($boardId: ID!, $groupId: String!, $cursor: String) {
 }`;
 
 async function fetchGroupItems(boardId, groupId) {
-  let cursor   = null;
-  let allItems = [];
-
+  let cursor = null, all = [];
   do {
-    const data = await gqlRequest(ITEMS_QUERY, { boardId, groupId, cursor });
+    const data  = await gqlRequest(ITEMS_QUERY, { boardId, groupId, cursor });
     const page  = data?.boards?.[0]?.groups?.[0]?.items_page;
     if (!page) break;
-    allItems = allItems.concat(page.items || []);
-    cursor   = page.cursor || null;
+    all    = all.concat(page.items || []);
+    cursor = page.cursor || null;
   } while (cursor);
+  return all;
+}
 
-  return allItems;
+// ── Pick the best status column from an item ──────────────────
+// Monday boards can name the status column anything.
+// Strategy: prefer 'color' type columns, then fall back to any
+// column whose ID or title contains known keywords.
+const STATUS_KEYWORDS = ['status','stage','completed','complete','task','progress','state'];
+
+function pickStatusCol(cols) {
+  // 1. First color-type column whose title/id suggests status
+  const byKeyword = cols.filter(c =>
+    c.type === 'color' &&
+    STATUS_KEYWORDS.some(k =>
+      c.id.toLowerCase().includes(k) ||
+      (c.title || '').toLowerCase().includes(k)
+    )
+  );
+  if (byKeyword.length) return byKeyword[0];
+
+  // 2. Any color-type column
+  const anyColor = cols.find(c => c.type === 'color');
+  if (anyColor) return anyColor;
+
+  // 3. Any column whose title matches keywords
+  return cols.find(c =>
+    STATUS_KEYWORDS.some(k =>
+      c.id.toLowerCase().includes(k) ||
+      (c.title || '').toLowerCase().includes(k)
+    )
+  ) || null;
 }
 
 // ── Main fetch ────────────────────────────────────────────
@@ -160,30 +202,31 @@ async function fetchBoard() {
 
   setSpinner(true);
   setSyncState('loading', 'Syncing');
-  console.log('[MSD] Starting fetch for board', BOARD_ID);
 
   try {
-    // 1. Get all groups (cheap)
     const boardData = await gqlRequest(GROUPS_QUERY, { ids: [BOARD_ID] });
     const board     = boardData?.boards?.[0];
     if (!board) throw new Error('Board not found. Check Board ID and token permissions.');
 
-    const groups = board.groups || [];
-    console.log('[MSD] Groups:', groups.map(g => g.title).join(', '));
-
-    // 2. Fetch items group by group (keeps complexity low)
+    const groups   = board.groups || [];
     const allTasks = [];
+
     for (const group of groups) {
-      console.log('[MSD] Fetching group:', group.title);
       const items = await fetchGroupItems(BOARD_ID, group.id);
+
       items.forEach(item => {
-        const sCol    = item.column_values.find(c =>
-          c.type === 'color' ||
-          c.id.toLowerCase().includes('status') ||
-          c.id.toLowerCase().includes('stage')
-        );
-        const pCol    = item.column_values.find(c => c.type === 'people');
+        const sCol     = pickStatusCol(item.column_values);
         const rawLabel = sCol ? (sCol.text || tryLabel(sCol.value)) : '';
+
+        // Log first item of first group so we can see what columns are available
+        if (allTasks.length === 0) {
+          console.log('[MSD] First item columns:', item.column_values.map(c =>
+            `${c.id}(${c.type}): title="${c.title}" text="${c.text}"`
+          ).join(' | '));
+          console.log('[MSD] Picked status col:', sCol ? `${sCol.id} text="${sCol.text}"` : 'NONE');
+        }
+
+        const pCol    = item.column_values.find(c => c.type === 'people');
         const assignee = pCol ? (pCol.text || tryPeople(pCol.value)) : '—';
 
         allTasks.push({
@@ -195,7 +238,10 @@ async function fetchBoard() {
       });
     }
 
-    console.log('[MSD] Total tasks:', allTasks.length);
+    console.log('[MSD] Tasks:', allTasks.length,
+      '| Done:', allTasks.filter(t=>t.status==='done').length,
+      '| Working:', allTasks.filter(t=>t.status==='working').length);
+
     renderAll(allTasks, groups);
     window.__msdTasks = allTasks;
     setSyncState('live', 'Synced');
@@ -209,7 +255,7 @@ async function fetchBoard() {
   }
 }
 
-// ── JSON value parsers ──────────────────────────────────────
+// ── Value parsers ─────────────────────────────────────────
 function tryLabel(raw) {
   try { const v = JSON.parse(raw); return v?.label || v?.text || ''; } catch { return ''; }
 }
@@ -309,7 +355,6 @@ function renderTable(tasks) {
 function renderEmpty(msg) {
   tasksTableBody.innerHTML = `<tr><td colspan="4" class="empty-state">${msg}</td></tr>`;
 }
-
 function renderError(msg) {
   tasksTableBody.innerHTML = `<tr><td colspan="4" class="empty-state error-state">
     <strong>⚠️ Sync Error</strong><br>
@@ -341,6 +386,7 @@ refreshBtn.addEventListener('click', fetchBoard);
 
 document.addEventListener('DOMContentLoaded', () => {
   if (getToken()) {
+    startAutoRefresh();
     fetchBoard();
   } else {
     setSyncState('error', 'No token');
