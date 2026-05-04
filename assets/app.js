@@ -3,13 +3,13 @@
    Monday.com Live Sync  |  Board 18407794764
    ============================================================= */
 
-const BOARD_ID = '18407794764';
+const BOARD_ID   = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
 
 // ── Status classification ────────────────────────────────────
-const DONE_LABELS     = ['done', 'complete', 'completed', 'finished'];
-const WORKING_LABELS  = ['working on it', 'in progress', 'working', 'started', 'in review'];
-const STUCK_LABELS    = ['stuck', 'blocked', 'on hold', 'waiting'];
+const DONE_LABELS    = ['done','complete','completed','finished'];
+const WORKING_LABELS = ['working on it','in progress','working','started','in review'];
+const STUCK_LABELS   = ['stuck','blocked','on hold','waiting'];
 
 function classify(label) {
   const v = (label || '').toLowerCase().trim();
@@ -27,7 +27,6 @@ function clearToken() { localStorage.removeItem(LS_KEY); }
 
 // ── DOM ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-
 const syncPill       = $('syncPill');
 const syncStatusEl   = $('syncStatus');
 const refreshBtn     = $('refreshBtn');
@@ -59,9 +58,9 @@ let donutChartInstance = null;
 function openDrawer()  { drawer.classList.add('open');    drawerOverlay.classList.add('open'); }
 function closeDrawer() { drawer.classList.remove('open'); drawerOverlay.classList.remove('open'); }
 
-settingsBtn.addEventListener('click',  () => { tokenInput.value = getToken(); openDrawer(); });
+settingsBtn.addEventListener('click', () => { tokenInput.value = getToken(); openDrawer(); });
 drawerCloseBtn.addEventListener('click', closeDrawer);
-drawerOverlay.addEventListener('click',  closeDrawer);
+drawerOverlay.addEventListener('click', closeDrawer);
 
 saveTokenBtn.addEventListener('click', () => {
   const t = tokenInput.value.trim();
@@ -74,11 +73,11 @@ saveTokenBtn.addEventListener('click', () => {
 clearTokenBtn.addEventListener('click', () => {
   clearToken();
   tokenInput.value = '';
-  setSyncState('error', 'Token cleared — open ⚙️ to reconnect');
+  setSyncState('error', 'Token cleared');
   renderEmpty('Token cleared. Click ⚙️ Settings to reconnect.');
 });
 
-// ── Pill state ────────────────────────────────────────────
+// ── Pill ──────────────────────────────────────────────────
 function setSyncState(state, label) {
   syncPill.className = 'sync-pill sync-' + state;
   const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -90,18 +89,45 @@ function setSpinner(on) {
   refreshBtn.disabled = on;
 }
 
-// ── GQL query (2024-01 schema with items_page) ──────────────
-const QUERY = `
-query GetBoard($ids: [ID!]!) {
+// ── GQL helpers ───────────────────────────────────────────
+function gqlRequest(query, variables = {}) {
+  return fetch(MONDAY_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': getToken(),
+      'API-Version':   '2024-01'
+    },
+    body: JSON.stringify({ query, variables })
+  })
+  .then(async res => {
+    const text = await res.text();
+    let json;
+    try { json = JSON.parse(text); } catch { throw new Error('Non-JSON: ' + text.slice(0, 200)); }
+    if (json.error_code) throw new Error(json.error_code + ': ' + (json.error_message || ''));
+    if (json.errors?.length) throw new Error(json.errors.map(e => e.message).join(' | '));
+    return json.data;
+  });
+}
+
+// ── Step 1: fetch groups only (very cheap query) ──────────────
+const GROUPS_QUERY = `
+query Groups($ids: [ID!]!) {
   boards(ids: $ids) {
     name
-    groups {
-      id
-      title
-      items_page(limit: 500) {
+    groups { id title }
+  }
+}`;
+
+// ── Step 2: fetch items for ONE group at a time (low complexity) ─
+const ITEMS_QUERY = `
+query Items($boardId: ID!, $groupId: String!, $cursor: String) {
+  boards(ids: [$boardId]) {
+    groups(ids: [$groupId]) {
+      items_page(limit: 50, cursor: $cursor) {
+        cursor
         items {
-          id
-          name
+          id name
           column_values { id type text value }
         }
       }
@@ -109,10 +135,24 @@ query GetBoard($ids: [ID!]!) {
   }
 }`;
 
-// ── Fetch ─────────────────────────────────────────────────
+async function fetchGroupItems(boardId, groupId) {
+  let cursor   = null;
+  let allItems = [];
+
+  do {
+    const data = await gqlRequest(ITEMS_QUERY, { boardId, groupId, cursor });
+    const page  = data?.boards?.[0]?.groups?.[0]?.items_page;
+    if (!page) break;
+    allItems = allItems.concat(page.items || []);
+    cursor   = page.cursor || null;
+  } while (cursor);
+
+  return allItems;
+}
+
+// ── Main fetch ────────────────────────────────────────────
 async function fetchBoard() {
-  const token = getToken();
-  if (!token) {
+  if (!getToken()) {
     setSyncState('error', 'No token');
     renderEmpty('Click ⚙️ Settings and paste your Monday API token.');
     return;
@@ -120,43 +160,45 @@ async function fetchBoard() {
 
   setSpinner(true);
   setSyncState('loading', 'Syncing');
-  console.log('[MSD] Requesting board', BOARD_ID);
+  console.log('[MSD] Starting fetch for board', BOARD_ID);
 
   try {
-    const res = await fetch(MONDAY_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token,          // Monday personal token: no Bearer prefix
-        'API-Version':   '2024-01'       // required for items_page
-      },
-      body: JSON.stringify({ query: QUERY, variables: { ids: [BOARD_ID] } })
-    });
+    // 1. Get all groups (cheap)
+    const boardData = await gqlRequest(GROUPS_QUERY, { ids: [BOARD_ID] });
+    const board     = boardData?.boards?.[0];
+    if (!board) throw new Error('Board not found. Check Board ID and token permissions.');
 
-    const raw = await res.text();
-    console.log('[MSD] HTTP', res.status, '|', raw.slice(0, 600));
+    const groups = board.groups || [];
+    console.log('[MSD] Groups:', groups.map(g => g.title).join(', '));
 
-    if (!res.ok) {
-      throw new Error('HTTP ' + res.status + ': ' + raw.slice(0, 200));
+    // 2. Fetch items group by group (keeps complexity low)
+    const allTasks = [];
+    for (const group of groups) {
+      console.log('[MSD] Fetching group:', group.title);
+      const items = await fetchGroupItems(BOARD_ID, group.id);
+      items.forEach(item => {
+        const sCol    = item.column_values.find(c =>
+          c.type === 'color' ||
+          c.id.toLowerCase().includes('status') ||
+          c.id.toLowerCase().includes('stage')
+        );
+        const pCol    = item.column_values.find(c => c.type === 'people');
+        const rawLabel = sCol ? (sCol.text || tryLabel(sCol.value)) : '';
+        const assignee = pCol ? (pCol.text || tryPeople(pCol.value)) : '—';
+
+        allTasks.push({
+          id: item.id, name: item.name,
+          section: group.title, rawLabel,
+          status: classify(rawLabel),
+          assignee: assignee || '—'
+        });
+      });
     }
 
-    let json;
-    try { json = JSON.parse(raw); }
-    catch (e) { throw new Error('Bad JSON from Monday: ' + raw.slice(0, 200)); }
-
-    if (json.errors?.length) {
-      throw new Error(json.errors.map(e => e.message).join(' | '));
-    }
-    if (json.error_code) {
-      throw new Error(json.error_code + ': ' + (json.error_message || json.status_code));
-    }
-
-    const board = json.data?.boards?.[0];
-    if (!board) throw new Error('No board data returned. Check board ID and token permissions.');
-
-    processBoard(board);
+    console.log('[MSD] Total tasks:', allTasks.length);
+    renderAll(allTasks, groups);
+    window.__msdTasks = allTasks;
     setSyncState('live', 'Synced');
-    console.log('[MSD] Done');
 
   } catch (err) {
     console.error('[MSD] Error:', err.message);
@@ -167,54 +209,16 @@ async function fetchBoard() {
   }
 }
 
-// ── Parse column value ──────────────────────────────────────
-function parseVal(col) {
-  try { return JSON.parse(col.value); } catch { return null; }
+// ── JSON value parsers ──────────────────────────────────────
+function tryLabel(raw) {
+  try { const v = JSON.parse(raw); return v?.label || v?.text || ''; } catch { return ''; }
 }
-
-function getStatusText(col) {
-  if (col.text) return col.text;
-  const v = parseVal(col);
-  return v?.label || v?.text || '';
-}
-
-function getAssigneeText(col) {
-  const v = parseVal(col);
-  if (!v) return col.text || '';
-  const list = v.personsAndTeams || v.persons_and_teams || [];
-  return list.map(p => p.name || p.id).filter(Boolean).join(', ');
-}
-
-// ── Process ────────────────────────────────────────────────
-function processBoard(board) {
-  const tasks = [];
-
-  board.groups.forEach(g => {
-    (g.items_page?.items || []).forEach(item => {
-      // Pick first status-type column
-      const sCols = item.column_values.filter(c =>
-        c.type === 'color' ||
-        c.id.toLowerCase().includes('status') ||
-        c.id.toLowerCase().includes('stage')
-      );
-      const sCol     = sCols[0] || null;
-      const rawLabel = sCol ? getStatusText(sCol) : '';
-
-      // Pick first people-type column
-      const pCol    = item.column_values.find(c => c.type === 'people');
-      const assignee = pCol ? (getAssigneeText(pCol) || '—') : '—';
-
-      tasks.push({
-        id: item.id, name: item.name,
-        section: g.title, rawLabel,
-        status: classify(rawLabel), assignee
-      });
-    });
-  });
-
-  console.log('[MSD] Tasks:', tasks.length);
-  renderAll(tasks, board.groups);
-  window.__msdTasks = tasks;
+function tryPeople(raw) {
+  try {
+    const v    = JSON.parse(raw);
+    const list = v?.personsAndTeams || v?.persons_and_teams || [];
+    return list.map(p => p.name || p.id).filter(Boolean).join(', ');
+  } catch { return ''; }
 }
 
 // ── Render all ─────────────────────────────────────────────
@@ -231,10 +235,10 @@ function renderAll(tasks, groups) {
   statNotStarted.textContent = notStarted;
   statPercent.textContent    = pct + '%';
 
-  const w = v => total ? (v / total * 100).toFixed(1) + '%' : '0%';
-  barCompleted.style.width  = w(done);
-  barInProgress.style.width = w(working);
-  barNotStarted.style.width = w(notStarted);
+  const pctOf = n => total ? (n / total * 100).toFixed(1) + '%' : '0%';
+  barCompleted.style.width  = pctOf(done);
+  barInProgress.style.width = pctOf(working);
+  barNotStarted.style.width = pctOf(notStarted);
   barPercent.style.width    = pct + '%';
 
   renderDonut(done, working, stuck, notStarted);
@@ -302,28 +306,23 @@ function renderTable(tasks) {
   }).join('');
 }
 
-function h(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
 function renderEmpty(msg) {
   tasksTableBody.innerHTML = `<tr><td colspan="4" class="empty-state">${msg}</td></tr>`;
 }
 
 function renderError(msg) {
-  tasksTableBody.innerHTML = `
-    <tr><td colspan="4" class="empty-state error-state">
-      <strong>⚠️ Sync Error</strong><br>
-      <code style="font-size:12px;word-break:break-all;">${h(msg)}</code><br><br>
-      <small>Steps to fix:<br>
-      1. Open ⚙️ Settings → paste your token from
-      <a href="https://rptclinic.monday.com/apps/manage/tokens" target="_blank" rel="noreferrer">monday.com/apps/manage/tokens</a><br>
-      2. Make sure your token has <strong>boards:read</strong> permission<br>
-      3. Open DevTools (F12) → Console for full details</small>
-    </td></tr>`;
+  tasksTableBody.innerHTML = `<tr><td colspan="4" class="empty-state error-state">
+    <strong>⚠️ Sync Error</strong><br>
+    <code style="font-size:11px;word-break:break-all;display:block;margin:8px 0;">${h(msg)}</code>
+    <small>Open DevTools → Console (F12) for details</small>
+  </td></tr>`;
 }
 
-// ── CSV export ───────────────────────────────────────────
+function h(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── CSV ─────────────────────────────────────────────────
 exportBtn.addEventListener('click', () => {
   const tasks = window.__msdTasks || [];
   if (!tasks.length) { alert('No data to export yet.'); return; }
@@ -337,15 +336,14 @@ exportBtn.addEventListener('click', () => {
   a.click();
 });
 
-// ── Refresh ─────────────────────────────────────────────────
+// ── Refresh + init ─────────────────────────────────────────
 refreshBtn.addEventListener('click', fetchBoard);
 
-// ── Init ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   if (getToken()) {
     fetchBoard();
   } else {
     setSyncState('error', 'No token');
-    renderEmpty('Click ⚙️ Settings and paste your Monday API token to load tasks.');
+    renderEmpty('Click ⚙️ Settings and paste your Monday API token.');
   }
 });
