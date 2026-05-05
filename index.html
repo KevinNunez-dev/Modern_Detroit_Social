@@ -42,6 +42,9 @@
   </div>
 </header>
 
+<!-- ===== PAGE WRAP — centers all content with left/right padding ===== -->
+<div class="page-wrap">
+
 <!-- ===== STAT CARDS ===== -->
 <section class="stats-row" id="statsRow">
   <article class="stat-card">
@@ -170,6 +173,225 @@
   </div>
 </section>
 
+<!-- ═══════════════════════════════════════════════════════════
+     SEO AUDIT REPORTS — Initial Findings & Baseline Data
+     ═══════════════════════════════════════════════════════════ -->
+<section class="audit-section" id="auditReports">
+
+  <div class="audit-section-header">
+    <div>
+      <p class="section-label">Baseline Audit · April 2026</p>
+      <h2>Initial SEO Findings & Reports</h2>
+      <p>Where we started from — full audit data, baseline metrics, and the 90-day action plan compiled on April 9, 2026 from SE Ranking, GBP analysis, and backlink profile review.</p>
+    </div>
+    <span class="audit-report-date">📅 Report Date: April 9, 2026</span>
+  </div>
+
+  <!-- Baseline KPI Snapshot -->
+  <div class="audit-kpi-grid">
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Search Visibility</div>
+      <div class="audit-kpi-value kpi-warning">20.6%</div>
+      <div class="audit-kpi-sub">SE Ranking · Apr 8, 2026</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Avg. Keyword Position</div>
+      <div class="audit-kpi-value kpi-danger">43</div>
+      <div class="audit-kpi-sub">Across tracked keyword set</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Keywords in Top 10</div>
+      <div class="audit-kpi-value kpi-warning">32%</div>
+      <div class="audit-kpi-sub">Of tracked keywords</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Organic Traffic</div>
+      <div class="audit-kpi-value">~104</div>
+      <div class="audit-kpi-sub">Sessions / month (forecast)</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Local Avg. Position</div>
+      <div class="audit-kpi-value kpi-warning">12.2</div>
+      <div class="audit-kpi-sub">Local pack ranking avg.</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">GBP Views</div>
+      <div class="audit-kpi-value kpi-accent">214,538</div>
+      <div class="audit-kpi-sub">Google Business Profile</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">GBP Click-Through</div>
+      <div class="audit-kpi-value kpi-danger">2.6%</div>
+      <div class="audit-kpi-sub">vs. 6%+ target</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Google Review Rating</div>
+      <div class="audit-kpi-value kpi-warning">3.8 / 5</div>
+      <div class="audit-kpi-sub">50 reviews · target 4.2+</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Audit Issues Found</div>
+      <div class="audit-kpi-value kpi-danger">67</div>
+      <div class="audit-kpi-sub">Technical SEO issues</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Toxic Backlinks</div>
+      <div class="audit-kpi-value kpi-danger">✗</div>
+      <div class="audit-kpi-sub">Moldova + Romania domains</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">GA4 Connected</div>
+      <div class="audit-kpi-value kpi-danger">✗ No</div>
+      <div class="audit-kpi-sub">Not installed at audit date</div>
+    </div>
+    <div class="audit-kpi">
+      <div class="audit-kpi-label">Search Console</div>
+      <div class="audit-kpi-value kpi-danger">✗ No</div>
+      <div class="audit-kpi-sub">Not linked at audit date</div>
+    </div>
+  </div>
+
+  <!-- Report Viewer Cards -->
+  <div class="audit-report-cards">
+
+    <!-- SEO Action Plan PDF -->
+    <div class="audit-report-card">
+      <div class="audit-card-header">
+        <div class="audit-card-title">
+          <div class="audit-card-icon icon-pdf">📄</div>
+          <div>
+            <div class="audit-card-name">SEO Action Plan</div>
+            <div class="audit-card-meta">PDF · April 9, 2026 · 9 pages</div>
+          </div>
+        </div>
+        <div class="audit-card-actions">
+          <button class="btn-ghost" id="togglePdf" onclick="toggleViewer('pdfViewer', 'togglePdf')" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            View
+          </button>
+        </div>
+      </div>
+      <div class="audit-card-viewer" id="pdfViewer">
+        <iframe
+          class="audit-viewer-iframe"
+          src="https://docs.google.com/viewer?url=https://raw.githubusercontent.com/kevinnunez-dev/Modern_Detroit_Social/main/reports/modern_social_detroit_seo_action_plan.pdf&embedded=true"
+          title="SEO Action Plan PDF"
+          loading="lazy"
+        ></iframe>
+      </div>
+    </div>
+
+    <!-- Executive SEO Report HTML -->
+    <div class="audit-report-card">
+      <div class="audit-card-header">
+        <div class="audit-card-title">
+          <div class="audit-card-icon icon-html">📊</div>
+          <div>
+            <div class="audit-card-name">SEO Executive Report</div>
+            <div class="audit-card-meta">Interactive HTML · April 2026</div>
+          </div>
+        </div>
+        <div class="audit-card-actions">
+          <button class="btn-ghost" id="toggleHtml" onclick="toggleViewer('htmlViewer', 'toggleHtml')" type="button">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            View
+          </button>
+        </div>
+      </div>
+      <div class="audit-card-viewer" id="htmlViewer">
+        <iframe
+          class="audit-viewer-iframe"
+          src="reports/modern-social-seo-final-report.html"
+          title="SEO Executive Report"
+          loading="lazy"
+        ></iframe>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 90-Day Targets Table -->
+  <div class="audit-targets-panel">
+    <div class="audit-targets-header">90-Day Performance Targets</div>
+    <table class="audit-targets-table">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Baseline (Apr 2026)</th>
+          <th></th>
+          <th>90-Day Target</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Search Visibility</td>
+          <td class="target-current">20.6%</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">35%+</td>
+        </tr>
+        <tr>
+          <td>Average Keyword Position</td>
+          <td class="target-current">43</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">Under 20</td>
+        </tr>
+        <tr>
+          <td>% Keywords in Top 10</td>
+          <td class="target-current">32%</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">50%+</td>
+        </tr>
+        <tr>
+          <td>Local Average Position</td>
+          <td class="target-current">12.2</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">Under 8</td>
+        </tr>
+        <tr>
+          <td>GBP Click-Through Rate</td>
+          <td class="target-current">2.6%</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">6%+</td>
+        </tr>
+        <tr>
+          <td>Local Pack Top 1–3 Keywords</td>
+          <td class="target-current">45</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">75+</td>
+        </tr>
+        <tr>
+          <td>Google Review Rating</td>
+          <td class="target-current">3.8 / 50 reviews</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">4.2+ / 65+ reviews</td>
+        </tr>
+        <tr>
+          <td>Organic Sessions / Month</td>
+          <td class="target-current">~104</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">200+</td>
+        </tr>
+        <tr>
+          <td>Corporate Keyword Rankings</td>
+          <td class="target-current">0 in top 20</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">5+ terms in top 20</td>
+        </tr>
+        <tr>
+          <td>Total Indexed Optimized Pages</td>
+          <td class="target-current">Low</td>
+          <td class="target-arrow">→</td>
+          <td class="target-goal">20+</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</section>
+<!-- ===== END AUDIT REPORTS ===== -->
+
+</div><!-- /.page-wrap -->
+
 <!-- ===== SETTINGS DRAWER ===== -->
 <div class="drawer-overlay" id="drawerOverlay"></div>
 <div class="drawer" id="settingsDrawer">
@@ -191,5 +413,16 @@
 </div>
 
 <script src="assets/app.js"></script>
+<script>
+function toggleViewer(viewerId, btnId) {
+  const viewer = document.getElementById(viewerId);
+  const btn = document.getElementById(btnId);
+  const isOpen = viewer.classList.toggle('open');
+  btn.classList.toggle('active', isOpen);
+  btn.innerHTML = isOpen
+    ? '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Close'
+    : '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View';
+}
+</script>
 </body>
 </html>

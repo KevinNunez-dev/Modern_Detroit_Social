@@ -52,6 +52,13 @@ body {
   transition: background 0.2s, color 0.2s;
 }
 
+/* ── Page Wrapper — centers and constrains all content ── */
+.page-wrap {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 4vw, 48px);
+}
+
 /* ── Topbar ───────────────────────────────────────────── */
 .topbar {
   position: sticky;
@@ -61,7 +68,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 24px;
+  padding: 14px clamp(16px, 4vw, 48px);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
@@ -175,7 +182,7 @@ body {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 14px;
-  padding: 20px 24px 0;
+  padding-top: 20px;
 }
 
 .stat-card {
@@ -199,7 +206,7 @@ body {
   display: grid;
   grid-template-columns: 260px 1fr 1fr;
   gap: 14px;
-  padding: 14px 24px 0;
+  padding-top: 14px;
 }
 
 .panel {
@@ -240,7 +247,7 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  padding: 14px 24px 0;
+  padding-top: 14px;
   flex-wrap: wrap;
 }
 
@@ -282,7 +289,8 @@ body {
 
 /* ── Table panel ──────────────────────────────────────── */
 .table-panel {
-  margin: 14px 24px 24px;
+  margin-top: 14px;
+  margin-bottom: 0;
 }
 
 .table-header-row {
@@ -488,23 +496,278 @@ body {
 }
 
 /* ── Responsive ───────────────────────────────────────── */
-@media (max-width: 1200px) {
-  .stats-row  { grid-template-columns: repeat(3, 1fr); }
-  .charts-row { grid-template-columns: 240px 1fr; }
-  .line-panel { grid-column: 1 / -1; }
+@media (max-width: 1024px) {
+  .stats-row    { grid-template-columns: repeat(3, 1fr); }
+  .charts-row   { grid-template-columns: 1fr 1fr; }
+  .donut-panel  { grid-column: 1 / -1; }
 }
-@media (max-width: 900px) {
+@media (max-width: 640px) {
   .stats-row  { grid-template-columns: repeat(2, 1fr); }
   .charts-row { grid-template-columns: 1fr; }
-}
-@media (max-width: 540px) {
-  .stats-row    { grid-template-columns: 1fr 1fr; padding: 12px; }
-  .charts-row,
-  .table-panel  { margin-left: 12px; margin-right: 12px; padding: 14px; }
-  .topbar       { padding: 12px; }
   .topbar-title { font-size: 16px; }
-  .agency-pill,
-  .btn span     { display: none; }
-  .filter-bar   { padding: 12px; gap: 8px; }
-  .filter-select { min-width: 120px; }
+  .agency-pill  { display: none; }
+}
+
+/* ══════════════════════════════════════════════════════════
+   SEO AUDIT REPORT SECTION
+   ══════════════════════════════════════════════════════════ */
+
+.audit-section {
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+  padding-bottom: 48px;
+}
+
+.audit-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.audit-section-header .section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--accent-gold);
+  margin-bottom: 4px;
+}
+
+.audit-section-header h2 {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.audit-section-header p {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 56ch;
+}
+
+.audit-report-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  white-space: nowrap;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+/* ── Baseline Snapshot KPIs ──────────────────────────── */
+.audit-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.audit-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.audit-kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.audit-kpi-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.audit-kpi-value.kpi-danger  { color: var(--red); }
+.audit-kpi-value.kpi-warning { color: var(--amber); }
+.audit-kpi-value.kpi-good    { color: var(--green); }
+.audit-kpi-value.kpi-accent  { color: var(--accent); }
+
+.audit-kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* ── Report Cards (PDF + HTML viewer) ─────────────────── */
+.audit-report-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .audit-report-cards { grid-template-columns: 1fr; }
+  .audit-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+.audit-report-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.audit-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.audit-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.audit-card-icon {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.icon-pdf  { background: rgba(239,68,68,.15); }
+.icon-html { background: rgba(99,102,241,.15); }
+
+.audit-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.audit-card-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+
+.audit-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Toggle button for inline viewer */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--accent); background: var(--surface2); }
+.btn-ghost.active { color: var(--accent); border-color: var(--accent); background: rgba(99,102,241,.08); }
+
+/* Inline iframe viewer */
+.audit-card-viewer {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+}
+.audit-card-viewer.open { display: flex; }
+
+.audit-viewer-iframe {
+  width: 100%;
+  border: none;
+  background: #fff;
+  min-height: 560px;
+  flex: 1;
+}
+
+/* ── 90-Day Targets Table ──────────────────────────────── */
+.audit-targets-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.audit-targets-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text-muted);
+}
+
+.audit-targets-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.audit-targets-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-targets-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  vertical-align: middle;
+}
+
+.audit-targets-table tr:last-child td { border-bottom: none; }
+.audit-targets-table tr:hover td { background: var(--surface2); }
+
+.target-current {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.target-goal {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.target-arrow {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 0 4px;
 }
