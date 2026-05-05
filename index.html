@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -31,6 +31,10 @@
       <svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
       Refresh
     </button>
+    <!-- Dark/Light Toggle -->
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle light/dark mode">
+      <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
     <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
@@ -60,9 +64,19 @@
     <div class="stat-value" id="statPercent">0%</div>
     <div class="mini-bar-wrap"><div class="mini-bar" id="barPercent" style="width:0%;background:#6366f1"></div></div>
   </article>
+  <article class="stat-card">
+    <p class="stat-label">Overdue</p>
+    <div class="stat-value overdue-val" id="statOverdue">0</div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barOverdue" style="width:0%;background:#ef4444"></div></div>
+  </article>
+  <article class="stat-card">
+    <p class="stat-label">High Priority</p>
+    <div class="stat-value priority-val" id="statHighPriority">0</div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barHighPriority" style="width:0%;background:#f97316"></div></div>
+  </article>
 </section>
 
-<!-- ===== CHARTS + SECTION BARS ===== -->
+<!-- ===== CHARTS ROW ===== -->
 <section class="charts-row">
   <article class="panel donut-panel">
     <p class="panel-eyebrow">Status Breakdown</p>
@@ -76,6 +90,54 @@
     <p class="panel-eyebrow">Section Completion</p>
     <div id="sectionBars"></div>
   </article>
+
+  <article class="panel line-panel">
+    <p class="panel-eyebrow">Monthly Progress</p>
+    <div class="line-wrap">
+      <canvas id="lineChart"></canvas>
+    </div>
+  </article>
+</section>
+
+<!-- ===== FILTER BAR ===== -->
+<section class="filter-bar" id="filterBar">
+  <div class="filter-group">
+    <label class="filter-label">Status</label>
+    <select id="filterStatus" class="filter-select">
+      <option value="all">All Statuses</option>
+      <option value="done">✓ Done</option>
+      <option value="working">⚡ In Progress</option>
+      <option value="stuck">🚫 Stuck</option>
+      <option value="not_started">○ Not Started</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Priority</label>
+    <select id="filterPriority" class="filter-select">
+      <option value="all">All Priorities</option>
+      <option value="high">🔴 High</option>
+      <option value="medium">🟡 Medium</option>
+      <option value="low">🟢 Low</option>
+      <option value="critical">🚨 Critical</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Section</label>
+    <select id="filterSection" class="filter-select">
+      <option value="all">All Sections</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label class="filter-label">Due Date</label>
+    <select id="filterDue" class="filter-select">
+      <option value="all">All</option>
+      <option value="overdue">⚠ Overdue</option>
+      <option value="this_week">This Week</option>
+      <option value="no_date">No Date Set</option>
+    </select>
+  </div>
+  <button class="btn btn-secondary" id="clearFilters" type="button">Clear Filters</button>
+  <span class="filter-result" id="filterResult"></span>
 </section>
 
 <!-- ===== TASKS TABLE ===== -->
@@ -88,14 +150,21 @@
     <table class="tasks-table">
       <thead>
         <tr>
+          <th></th>
           <th>Task Name</th>
           <th>Section</th>
+          <th>Priority</th>
           <th>Status</th>
+          <th>Due Date</th>
           <th>Assigned To</th>
         </tr>
       </thead>
       <tbody id="tasksTableBody">
-        <tr><td colspan="4" class="empty-state">Loading tasks from Monday board...</td></tr>
+        <tr><td colspan="7" class="empty-state">
+          <div class="empty-icon">📋</div>
+          <strong>No token connected</strong><br>
+          <span>Click ⚙️ Settings to paste your Monday API token and load your SEO board.</span>
+        </td></tr>
       </tbody>
     </table>
   </div>
