@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modern Social Detroit SEO Executive Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,600;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f5f7fb; --surface: #ffffff; --surface-soft: #f8fafc; --surface-alt: #eef3f7;
+  --line: #d9e1ea; --text: #1f2937; --muted: #667085; --faint: #94a3b8;
+  --nav: #243341; --nav-2: #1e2a35; --topbar: #0f6cc7;
+  --primary: #01696f; --primary-soft: #d9ecea; --primary-strong: #0c4e54;
+  --success: #2e7d32; --warning: #b96b10; --danger: #b42318;
+  --shadow-sm: 0 1px 2px rgba(16,24,40,.05); --shadow-md: 0 10px 24px rgba(16,24,40,.06);
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Inter,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.5}
+a{color:inherit;text-decoration:none}
+button{font:inherit}
+h1,h2,h3,h4{margin:0}
+
+/* Layout */
+.page{max-width:960px;margin:0 auto;padding:32px 24px 64px}
+
+/* Header */
+.report-header{background:var(--topbar);color:#fff;padding:28px 32px;border-radius:var(--radius-lg);margin-bottom:28px}
+.report-header .eyebrow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.75;margin-bottom:6px}
+.report-header h1{font-family:'Source Serif 4',Georgia,serif;font-size:26px;font-weight:700;margin-bottom:6px}
+.report-header .subtitle{font-size:13px;opacity:.8}
+.report-meta{display:flex;gap:16px;margin-top:14px;flex-wrap:wrap}
+.meta-chip{background:rgba(255,255,255,.15);border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600}
+
+/* Cards */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);margin-bottom:20px;overflow:hidden}
+.card-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.card-title{font-size:15px;font-weight:700}
+.card-body{padding:18px}
+
+/* KPI Grid */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:14px 16px}
+.kpi-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.kpi-value{font-size:24px;font-weight:700;color:var(--topbar);line-height:1;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* Table */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--surface-soft);color:#475467;font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding:10px 14px;border-bottom:1px solid var(--line);text-align:left}
+td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--surface-soft)}
+
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700}
+.badge-green{background:#dcf0dc;color:#1a5c1a}
+.badge-yellow{background:#fef3c7;color:#92600a}
+.badge-red{background:#fde8ec;color:#8c3a4a}
+.badge-blue{background:#e0f0ff;color:#1254a1}
+
+/* Section headings */
+.section-head{margin:28px 0 14px}
+.section-head h2{font-size:18px;font-weight:700;margin-bottom:4px}
+.section-head p{color:var(--muted);font-size:13px;max-width:72ch}
+
+/* Two col */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:700px){.two-col{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* Bar rows */
+.bar-list{display:grid;gap:12px}
+.bar-row{display:grid;grid-template-columns:200px 1fr 48px;gap:10px;align-items:center;font-size:13px}
+.track{height:8px;border-radius:999px;background:var(--surface-alt);overflow:hidden}
+.fill{display:block;height:100%;background:linear-gradient(90deg,var(--primary),#22a1a8);border-radius:999px;transition:width 1s ease}
+.val{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-weight:600}
+
+/* Target table */
+.target-current{color:var(--muted);font-variant-numeric:tabular-nums}
+.target-goal{color:var(--success);font-weight:700;font-variant-numeric:tabular-nums}
+.target-arrow{color:var(--faint);text-align:center}
+
+/* Checklist */
+.check-list{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+.check-list li{display:flex;gap:10px;font-size:13px;color:var(--muted);align-items:flex-start}
+.check-list li::before{content:"•";color:var(--primary);font-weight:800;flex-shrink:0;margin-top:1px}
+.check-list li strong{color:var(--text)}
+
+/* GBP status table */
+.status-yes{color:var(--success);font-weight:700}
+.status-no{color:var(--danger);font-weight:700}
+.status-warn{color:var(--warning);font-weight:700}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="report-header">
+    <p class="eyebrow">PHL Digital Agency &middot; SEO Executive Report</p>
+    <h1>Modern Social Detroit &mdash; SEO Audit</h1>
+    <p class="subtitle">modernsocialdetroit.com &middot; Detroit, MI &amp; Michigan Market</p>
+    <div class="report-meta">
+      <span class="meta-chip">&#128197; Report Date: April 9, 2026</span>
+      <span class="meta-chip">&#128202; Data: SE Ranking Audit (Apr 8, 2026)</span>
+      <span class="meta-chip">&#128205; Market: Detroit, MI</span>
+    </div>
+  </div>
+
+  <!-- Performance Snapshot -->
+  <div class="section-head">
+    <h2>Current Performance Snapshot</h2>
+    <p>Baseline metrics at audit date &mdash; all data sourced from SE Ranking, GBP analysis, and backlink profile review.</p>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Search Visibility</div><div class="kpi-value" style="color:#b96b10">20.6%</div><div class="kpi-sub">SE Ranking metric</div></div>
+    <div class="kpi"><div class="kpi-label">Avg Keyword Position</div><div class="kpi-value" style="color:#b42318">43</div><div class="kpi-sub">Tracked keyword set</div></div>
+    <div class="kpi"><div class="kpi-label">Keywords in Top 10</div><div class="kpi-value" style="color:#b96b10">32%</div><div class="kpi-sub">Of tracked terms</div></div>
+    <div class="kpi"><div class="kpi-label">Organic Traffic</div><div class="kpi-value">~104</div><div class="kpi-sub">Sessions / month</div></div>
+    <div class="kpi"><div class="kpi-label">Local Avg Position</div><div class="kpi-value" style="color:#b96b10">12.2</div><div class="kpi-sub">Local pack avg</div></div>
+    <div class="kpi"><div class="kpi-label">GBP Views</div><div class="kpi-value" style="color:var(--topbar)">214,538</div><div class="kpi-sub">Google Business Profile</div></div>
+    <div class="kpi"><div class="kpi-label">GBP Click-Through</div><div class="kpi-value" style="color:#b42318">2.6%</div><div class="kpi-sub">vs 6%+ target</div></div>
+    <div class="kpi"><div class="kpi-label">Google Reviews</div><div class="kpi-value" style="color:#b96b10">3.8/5</div><div class="kpi-sub">50 reviews</div></div>
+    <div class="kpi"><div class="kpi-label">Audit Issues</div><div class="kpi-value" style="color:#b42318">67</div><div class="kpi-sub">Technical SEO issues</div></div>
+    <div class="kpi"><div class="kpi-label">GA4 Connected</div><div class="kpi-value" style="color:#b42318">&#10007; No</div><div class="kpi-sub">Not installed</div></div>
+    <div class="kpi"><div class="kpi-label">Search Console</div><div class="kpi-value" style="color:#b42318">&#10007; No</div><div class="kpi-sub">Not linked</div></div>
+    <div class="kpi"><div class="kpi-label">Toxic Backlinks</div><div class="kpi-value" style="color:#b42318">&#10003;</div><div class="kpi-sub">Moldova + Romania</div></div>
+  </div>
+
+  <!-- Competitor Relevance Index -->
+  <div class="card">
+    <div class="card-head"><span class="card-title">Domain Relevance Index &mdash; Competitor Landscape</span></div>
+    <div class="card-body">
+      <div class="bar-list">
+        <div class="bar-row"><div>Modern Social Detroit</div><div class="track"><span class="fill" style="width:100%"></span></div><div class="val">25/25</div></div>
+        <div class="bar-row"><div>EXP PHOTO</div><div class="track"><span class="fill" style="width:92%"></span></div><div class="val">23/25</div></div>
+        <div class="bar-row"><div>Scott Lawrence Photo</div><div class="track"><span class="fill" style="width:88%"></span></div><div class="val">22/25</div></div>
+        <div class="bar-row"><div>Detroit Photography</div><div class="track"><span class="fill" style="width:84%"></span></div><div class="val">21/25</div></div>
+        <div class="bar-row"><div>ShutterBooth Detroit</div><div class="track"><span class="fill" style="width:72%"></span></div><div class="val">18/25</div></div>
+        <div class="bar-row"><div>Fancy Flash Photo Booth</div><div class="track"><span class="fill" style="width:68%"></span></div><div class="val">17/25</div></div>
+        <div class="bar-row"><div>Detroit City Headshots</div><div class="track"><span class="fill" style="width:64%"></span></div><div class="val">16/25</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Keywords -->
+  <div class="card">
+    <div class="card-head"><span class="card-title">Top Ranking Keywords</span></div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Keyword</th><th>Position</th><th>Search Volume</th><th>Visibility</th></tr></thead>
+          <tbody>
+            <tr><td><strong>photo booth detroit</strong></td><td>3</td><td>210</td><td>100%</td></tr>
+            <tr><td>wedding photo booth michigan</td><td>4</td><td>10</td><td>85%</td></tr>
+            <tr><td>photo booth rental in michigan</td><td>5</td><td>110</td><td>60%</td></tr>
+            <tr><td>photo booth michigan wedding</td><td>5</td><td>10</td><td>60%</td></tr>
+            <tr><td>detroit photo booth</td><td>6</td><td>210</td><td>50%</td></tr>
+            <tr><td>photo booth rental michigan detroit</td><td>8</td><td>260</td><td>—</td></tr>
+            <tr><td>photo booth rental detroit michigan</td><td>10</td><td>260</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- GBP Status -->
+  <div class="card">
+    <div class="card-head"><span class="card-title">Google Business Profile &mdash; Missing &amp; Incomplete Elements</span></div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Element</th><th>Status</th><th>Action Required</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Business Hours</strong></td><td><span class="status-no">&#10007; Not listed</span></td><td>Add immediately &mdash; #1 local pack ranking signal</td></tr>
+            <tr><td>Booking Link</td><td><span class="status-no">&#10007; Missing</span></td><td>Connect after booking system is live</td></tr>
+            <tr><td>Service Menu</td><td><span class="status-warn">&#9651; Incomplete</span></td><td>Add all services with keyword-rich descriptions</td></tr>
+            <tr><td>Q&amp;A Section</td><td><span class="status-no">&#10007; Unanswered</span></td><td>Seed 10 Q&amp;As; answer all proactively</td></tr>
+            <tr><td>Products with Prices</td><td><span class="status-no">&#10007; Missing</span></td><td>Add service packages with price ranges</td></tr>
+            <tr><td>GBP Post Frequency</td><td><span class="status-warn">&#9651; Low</span></td><td>Schedule 2 posts/week minimum</td></tr>
+            <tr><td>Photo Count</td><td><span class="status-warn">&#9651; Below 100</span></td><td>Upload 25+ event and setup photos</td></tr>
+            <tr><td>Video Content</td><td><span class="status-no">&#10007; None</span></td><td>Add 2&ndash;3 short event recap videos</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Backlinks -->
+  <div class="card">
+    <div class="card-head"><span class="card-title">Backlink Profile &mdash; Toxic Link Risk</span></div>
+    <div class="card-body">
+      <div class="two-col">
+        <div>
+          <div class="kpi-grid" style="grid-template-columns:repeat(2,1fr);margin-bottom:0">
+            <div class="kpi"><div class="kpi-label">Domain Trust</div><div class="kpi-value">14</div></div>
+            <div class="kpi"><div class="kpi-label">Referring Domains</div><div class="kpi-value">54</div></div>
+            <div class="kpi"><div class="kpi-label">Total Backlinks</div><div class="kpi-value">69</div></div>
+            <div class="kpi"><div class="kpi-label">New (30 days)</div><div class="kpi-value" style="color:var(--success)">+11</div></div>
+          </div>
+        </div>
+        <div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px"><strong style="color:var(--danger)">52.9% of referring domains are from Moldova (35.3%) and Romania (17.6%)</strong> &mdash; two of the highest spam-origin countries in SEO. Additionally, 27.5% of all backlinks carry the anchor text &ldquo;Start Own SEO business,&rdquo; which has zero relevance to a Detroit photo booth business.</p>
+          <table style="font-size:13px">
+            <thead><tr><th>Anchor Text</th><th>Backlinks</th><th>%</th></tr></thead>
+            <tbody>
+              <tr><td>modernsocialdetroit.com</td><td>28</td><td>40.6%</td></tr>
+              <tr><td><span style="color:var(--danger);font-weight:700">Start Own SEO business</span></td><td>19</td><td>27.5%</td></tr>
+              <tr><td>Modern Social Detroit</td><td>7</td><td>10.1%</td></tr>
+              <tr><td>Website</td><td>6</td><td>8.7%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Service Pages Needed -->
+  <div class="card">
+    <div class="card-head"><span class="card-title">Service Landing Pages to Build</span><span class="badge badge-red">91% of rankings on 1 URL</span></div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Page</th><th>Primary Keyword</th><th>Secondary Keywords</th></tr></thead>
+          <tbody>
+            <tr><td>/corporate-event-photography</td><td>corporate event photographer Detroit</td><td>corporate photographer Michigan</td></tr>
+            <tr><td>/brand-activation-photography</td><td>brand activation photographer Michigan</td><td>experiential marketing photographer Detroit</td></tr>
+            <tr><td>/photo-booth-rental</td><td>photo booth rental Detroit MI</td><td>photo booth rental Michigan</td></tr>
+            <tr><td>/corporate-headshots</td><td>corporate headshots Detroit</td><td>executive portraits Michigan</td></tr>
+            <tr><td>/trade-show-photography</td><td>trade show photographer Michigan</td><td>conference photographer Detroit</td></tr>
+            <tr><td>/holiday-party-photo-booth</td><td>holiday party photo booth Detroit</td><td>company party photographer Michigan</td></tr>
+            <tr><td>/pricing</td><td>photo booth rental cost Michigan</td><td>corporate event photography pricing Detroit</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 90-Day Targets -->
+  <div class="card">
+    <div class="card-head"><span class="card-title">90-Day Performance Targets</span></div>
+    <div class="card-body">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th>Current (Apr 2026)</th><th style="text-align:center">&rarr;</th><th>90-Day Target</th></tr></thead>
+          <tbody>
+            <tr><td>Search Visibility</td><td class="target-current">20.6%</td><td class="target-arrow">&rarr;</td><td class="target-goal">35%+</td></tr>
+            <tr><td>Average Keyword Position</td><td class="target-current">43</td><td class="target-arrow">&rarr;</td><td class="target-goal">Under 20</td></tr>
+            <tr><td>% Keywords in Top 10</td><td class="target-current">32%</td><td class="target-arrow">&rarr;</td><td class="target-goal">50%+</td></tr>
+            <tr><td>Local Average Position</td><td class="target-current">12.2</td><td class="target-arrow">&rarr;</td><td class="target-goal">Under 8</td></tr>
+            <tr><td>GBP Click-Through Rate</td><td class="target-current">2.6%</td><td class="target-arrow">&rarr;</td><td class="target-goal">6%+</td></tr>
+            <tr><td>Local Pack Top 1&ndash;3 Keywords</td><td class="target-current">45</td><td class="target-arrow">&rarr;</td><td class="target-goal">75+</td></tr>
+            <tr><td>Google Review Rating</td><td class="target-current">3.8 / 50 reviews</td><td class="target-arrow">&rarr;</td><td class="target-goal">4.2+ / 65+ reviews</td></tr>
+            <tr><td>Organic Sessions / Month</td><td class="target-current">~104</td><td class="target-arrow">&rarr;</td><td class="target-goal">200+</td></tr>
+            <tr><td>Corporate Keyword Rankings</td><td class="target-current">0 in top 20</td><td class="target-arrow">&rarr;</td><td class="target-goal">5+ terms in top 20</td></tr>
+            <tr><td>Total Indexed Optimized Pages</td><td class="target-current">Low</td><td class="target-arrow">&rarr;</td><td class="target-goal">20+</td></tr>
+            <tr><td>Toxic Links Disavowed</td><td class="target-current">0</td><td class="target-arrow">&rarr;</td><td class="target-goal">100% of Moldova/Romania domains</td></tr>
+            <tr><td>Booking Conversions Tracked</td><td class="target-current">0</td><td class="target-arrow">&rarr;</td><td class="target-goal">Fully tracked in GA4</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:var(--faint);font-size:12px;margin-top:32px">Report compiled April 9, 2026 &middot; Data: SE Ranking audit (April 8, 2026) &middot; modernsocialdetroit.com &middot; PHL Digital Agency</p>
+
+</div>
+
+<script>
+document.querySelectorAll('.fill').forEach(el => {
+  const w = el.style.width; el.style.width = '0';
+  setTimeout(() => el.style.width = w, 300);
+});
+</script>
+</body>
+</html>
