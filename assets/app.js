@@ -1,14 +1,15 @@
 /* =============================================================
    Modern Social Detroit — SEO Audit Dashboard
-   Monday.com Live Sync  |  Board 18407794764
+   Monday.com Manual Sync  |  Board 18407794764
    ============================================================= */
 
 const BOARD_ID   = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
-const AUTO_REFRESH_MS = 300000; // 5 minutes
-const SNAPSHOT_KEY    = 'msd_snapshot';  // sessionStorage key
+const SNAPSHOT_KEY   = 'msd_snapshot_v2'; // localStorage key — persists across tab closes
+const COOLDOWN_MS    = 60_000;            // 60s minimum between manual syncs
+const SNAPSHOT_TTL   = 3_600_000;         // 1 hour — use cache on load if fresher than this
 
-// ── Status classification ────────────────────────────────────
+// ── Status classification ─────────────────────────────────────
 const DONE_LABELS    = ['done','complete','completed','finished','closed'];
 const WORKING_LABELS = ['working on it','in progress','working','started','in review','active'];
 const STUCK_LABELS   = ['stuck','blocked','on hold','waiting','paused'];
@@ -22,7 +23,7 @@ function classify(label) {
   return 'not_started';
 }
 
-// ── Priority classification ──────────────────────────────────
+// ── Priority classification ───────────────────────────────────
 const PRIORITY_HIGH     = ['high','urgent','important'];
 const PRIORITY_CRITICAL = ['critical','blocker','must fix','asap'];
 const PRIORITY_LOW      = ['low','minor','nice to have'];
@@ -53,7 +54,7 @@ function getToken()   { return localStorage.getItem(LS_KEY) || ''; }
 function saveToken(t) { localStorage.setItem(LS_KEY, t.trim()); }
 function clearToken() { localStorage.removeItem(LS_KEY); }
 
-// ── DOM refs ───────────────────────────────────────────────────
+// ── DOM refs ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const syncPill         = $('syncPill');
 const syncStatusEl     = $('syncStatus');
@@ -92,21 +93,19 @@ const filterDue        = $('filterDue');
 const clearFilters     = $('clearFilters');
 const filterResult     = $('filterResult');
 
-let donutChartInstance = null;
-let lineChartInstance  = null;
-let autoRefreshTimer   = null;
-let allTasksGlobal     = [];
-let allGroupsGlobal    = [];
+let donutChartInstance  = null;
+let lineChartInstance   = null;
+let allTasksGlobal      = [];
+let allGroupsGlobal     = [];
+let lastFetchAt         = 0;   // timestamp of last successful API call
+let cooldownTimer       = null;
 
-// ── Snapshot helpers ───────────────────────────────────────────
+// ── Snapshot helpers (localStorage — survives tab close) ──────
 function saveSnapshot(tasks, groups) {
   try {
-    const payload = {
-      tasks,
-      groups,
-      savedAt: new Date().toISOString()
-    };
-    sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(payload));
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+      tasks, groups, savedAt: new Date().toISOString()
+    }));
   } catch (e) {
     console.warn('[MSD] Could not save snapshot:', e.message);
   }
@@ -114,74 +113,88 @@ function saveSnapshot(tasks, groups) {
 
 function loadSnapshot() {
   try {
-    const raw = sessionStorage.getItem(SNAPSHOT_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+    const raw = localStorage.getItem(SNAPSHOT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 }
 
-function showSnapshotBanner(savedAt) {
+function snapshotIsFresh(snap) {
+  if (!snap?.savedAt) return false;
+  return (Date.now() - new Date(snap.savedAt).getTime()) < SNAPSHOT_TTL;
+}
+
+// ── Snapshot / cached-data banner ────────────────────────────
+function showSnapshotBanner(savedAt, reason) {
   let banner = $('snapshotBanner');
   if (!banner) {
     banner = document.createElement('div');
     banner.id = 'snapshotBanner';
     banner.style.cssText = [
-      'position:fixed', 'top:60px', 'left:50%', 'transform:translateX(-50%)',
-      'background:#f59e0b', 'color:#1c1a14', 'padding:8px 18px',
-      'border-radius:8px', 'font-size:13px', 'font-weight:600',
-      'box-shadow:0 4px 16px rgba(0,0,0,0.18)', 'z-index:9999',
-      'display:flex', 'align-items:center', 'gap:10px', 'max-width:90vw'
+      'position:fixed','top:62px','left:50%','transform:translateX(-50%)',
+      'background:#f59e0b','color:#1c1a14','padding:8px 20px',
+      'border-radius:8px','font-size:13px','font-weight:600',
+      'box-shadow:0 4px 16px rgba(0,0,0,0.18)','z-index:9999',
+      'display:flex','align-items:center','gap:10px','max-width:92vw'
     ].join(';');
     document.body.appendChild(banner);
   }
   const timeStr = savedAt
-    ? new Date(savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+    ? new Date(savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
     : 'unknown time';
-  banner.innerHTML = `
-    <span>📦 Viewing cached data from ${timeStr} — Monday daily API limit reached. Resets at midnight UTC.</span>
-    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0;color:#1c1a14" aria-label="Dismiss">✕</button>
-  `;
+  const msg = reason === 'limit'
+    ? `📦 Cached data from ${timeStr} — Monday daily API limit reached. Resets at 8 PM EDT.`
+    : `📦 Showing cached data from ${timeStr}. Hit ↻ Sync to fetch latest from Monday.`;
+  banner.innerHTML = `<span>${msg}</span>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0;color:#1c1a14" aria-label="Dismiss">✕</button>`;
 }
 
 function hideSnapshotBanner() {
-  const b = $('snapshotBanner');
-  if (b) b.remove();
+  const b = $('snapshotBanner'); if (b) b.remove();
 }
 
-// ── Theme Toggle ───────────────────────────────────────────────
+// ── Refresh button cooldown ───────────────────────────────────
+function startCooldown() {
+  if (cooldownTimer) clearInterval(cooldownTimer);
+  let remaining = Math.ceil(COOLDOWN_MS / 1000);
+  refreshBtn.disabled = true;
+
+  const originalHTML = refreshBtn.innerHTML;
+  const tick = () => {
+    if (remaining <= 0) {
+      clearInterval(cooldownTimer);
+      cooldownTimer = null;
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = originalHTML;
+      return;
+    }
+    refreshBtn.innerHTML = `<svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> ${remaining}s`;
+    remaining--;
+  };
+  tick();
+  cooldownTimer = setInterval(tick, 1000);
+}
+
+// ── Theme Toggle ──────────────────────────────────────────────
 const SUN_SVG  = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
 const MOON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 
 const THEME_KEY = 'msd_theme';
-
-function getStoredTheme() {
-  return localStorage.getItem(THEME_KEY);
-}
-
+function getStoredTheme() { return localStorage.getItem(THEME_KEY); }
 function getCurrentTheme() {
-  return document.documentElement.getAttribute('data-theme') ||
-         getStoredTheme() ||
-         'light';
+  return document.documentElement.getAttribute('data-theme') || getStoredTheme() || 'light';
 }
-
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(THEME_KEY, theme);
   themeIcon.innerHTML = theme === 'dark' ? MOON_SVG : SUN_SVG;
   if (allTasksGlobal.length) renderCharts(allTasksGlobal, allGroupsGlobal);
 }
-
 applyTheme(getCurrentTheme());
-
 themeToggle.addEventListener('click', () => {
-  const current = getCurrentTheme();
-  const next = current === 'dark' ? 'light' : 'dark';
-  applyTheme(next);
+  applyTheme(getCurrentTheme() === 'dark' ? 'light' : 'dark');
 });
 
-// ── Drawer ─────────────────────────────────────────────────────
+// ── Drawer ────────────────────────────────────────────────────
 function openDrawer()  { drawer.classList.add('open');    drawerOverlay.classList.add('open'); }
 function closeDrawer() { drawer.classList.remove('open'); drawerOverlay.classList.remove('open'); }
 
@@ -194,28 +207,17 @@ saveTokenBtn.addEventListener('click', () => {
   if (!t) { alert('Paste your Monday API token first.'); return; }
   saveToken(t);
   closeDrawer();
-  startAutoRefresh();
   fetchBoard();
 });
 
 clearTokenBtn.addEventListener('click', () => {
   clearToken();
-  stopAutoRefresh();
   tokenInput.value = '';
   setSyncState('error', 'Token cleared');
   renderNoToken();
 });
 
-// ── Auto-refresh ───────────────────────────────────────────────
-function startAutoRefresh() {
-  stopAutoRefresh();
-  autoRefreshTimer = setInterval(fetchBoard, AUTO_REFRESH_MS);
-}
-function stopAutoRefresh() {
-  if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
-}
-
-// ── Sync pill ──────────────────────────────────────────────────
+// ── Sync pill ─────────────────────────────────────────────────
 function setSyncState(state, label) {
   syncPill.className = 'sync-pill sync-' + state;
   const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -223,15 +225,14 @@ function setSyncState(state, label) {
 }
 function setSpinner(on) {
   refreshIcon.style.animation = on ? 'spin 0.8s linear infinite' : '';
-  refreshBtn.disabled = on;
 }
 
-// ── GQL helper ─────────────────────────────────────────────────
+// ── GQL helper ────────────────────────────────────────────────
 function gqlRequest(query, variables = {}) {
   return fetch(MONDAY_API, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type':  'application/json',
       'Authorization': getToken(),
       'API-Version':   '2024-01'
     },
@@ -247,7 +248,7 @@ function gqlRequest(query, variables = {}) {
   });
 }
 
-// ── GraphQL queries ────────────────────────────────────────────
+// ── GraphQL queries ───────────────────────────────────────────
 const GROUPS_QUERY = `
 query Groups($ids: [ID!]!) {
   boards(ids: $ids) {
@@ -283,7 +284,7 @@ async function fetchGroupItems(boardId, groupId) {
   return all;
 }
 
-// ── Column pickers ─────────────────────────────────────────────
+// ── Column pickers ────────────────────────────────────────────
 const STATUS_TYPES    = ['status', 'color'];
 const STATUS_KEYWORDS = ['status','stage','completed','complete','task','progress','state','done'];
 
@@ -292,8 +293,7 @@ function pickStatusCol(cols) {
     STATUS_TYPES.includes(c.type) &&
     STATUS_KEYWORDS.some(k => c.id.toLowerCase().includes(k))
   );
-  if (byKeyword) return byKeyword;
-  return cols.find(c => STATUS_TYPES.includes(c.type)) || null;
+  return byKeyword || cols.find(c => STATUS_TYPES.includes(c.type)) || null;
 }
 
 function pickPriorityCol(cols) {
@@ -320,14 +320,13 @@ function extractDate(col) {
   return null;
 }
 
-// ── Due date helpers ───────────────────────────────────────────
+// ── Due date helpers ──────────────────────────────────────────
 function isOverdue(dateStr) {
   if (!dateStr) return false;
   const d = new Date(dateStr);
   const today = new Date(); today.setHours(0,0,0,0);
   return d < today;
 }
-
 function isThisWeek(dateStr) {
   if (!dateStr) return false;
   const d = new Date(dateStr);
@@ -335,14 +334,12 @@ function isThisWeek(dateStr) {
   const weekEnd = new Date(today); weekEnd.setDate(today.getDate() + 7);
   return d >= today && d <= weekEnd;
 }
-
 function formatDate(dateStr) {
   if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// ── Main fetch ─────────────────────────────────────────────────
+// ── Main fetch (manual only — no auto-refresh timer) ──────────
 async function fetchBoard() {
   if (!getToken()) {
     setSyncState('error', 'No token');
@@ -350,7 +347,16 @@ async function fetchBoard() {
     return;
   }
 
+  // Cooldown guard — prevent spamming the API
+  const msSinceLast = Date.now() - lastFetchAt;
+  if (lastFetchAt > 0 && msSinceLast < COOLDOWN_MS) {
+    const wait = Math.ceil((COOLDOWN_MS - msSinceLast) / 1000);
+    setSyncState('error', `Wait ${wait}s before syncing again`);
+    return;
+  }
+
   setSpinner(true);
+  refreshBtn.disabled = true;
   setSyncState('loading', 'Syncing');
 
   try {
@@ -364,7 +370,6 @@ async function fetchBoard() {
 
     for (const group of groups) {
       const items = await fetchGroupItems(BOARD_ID, group.id);
-
       items.forEach(item => {
         const sCol     = pickStatusCol(item.column_values);
         const pCol     = pickPriorityCol(item.column_values);
@@ -380,15 +385,14 @@ async function fetchBoard() {
         }
 
         allTasks.push({
-          id: item.id,
-          name: item.name,
-          section: group.title,
-          rawLabel,
-          rawPrio,
-          status: classify(rawLabel),
+          id:       item.id,
+          name:     item.name,
+          section:  group.title,
+          rawLabel, rawPrio,
+          status:   classify(rawLabel),
           priority: classifyPriority(rawPrio),
-          dueDate: rawDate,
-          overdue: isOverdue(rawDate),
+          dueDate:  rawDate,
+          overdue:  isOverdue(rawDate),
           assignee: aCol ? (aCol.text || tryPeople(aCol.value)) : '—'
         });
       });
@@ -396,8 +400,9 @@ async function fetchBoard() {
 
     allTasksGlobal  = allTasks;
     allGroupsGlobal = groups;
+    lastFetchAt     = Date.now();
 
-    // Save snapshot on every successful fetch
+    // Persist snapshot to localStorage
     saveSnapshot(allTasks, groups);
     hideSnapshotBanner();
 
@@ -427,35 +432,17 @@ async function fetchBoard() {
       msg.toLowerCase().includes('complexity limit');
 
     if (isDailyLimit) {
-      stopAutoRefresh();
-      setSyncState('error', 'Daily limit — cached view');
-
-      // Try to load snapshot
+      setSyncState('error', 'API limit — cached view');
       const snap = loadSnapshot();
-      if (snap && snap.tasks && snap.tasks.length) {
-        allTasksGlobal  = snap.tasks;
-        allGroupsGlobal = snap.groups || [];
+      if (snap?.tasks?.length) {
+        allTasksGlobal    = snap.tasks;
+        allGroupsGlobal   = snap.groups || [];
         window.__msdTasks = snap.tasks;
-
-        // Re-populate section filter from snapshot
-        const sectionSel = $('filterSection');
-        const existing   = [...sectionSel.options].map(o => o.value);
-        (snap.groups || []).forEach(g => {
-          if (!existing.includes(g.title)) {
-            const opt = document.createElement('option');
-            opt.value = g.title; opt.textContent = g.title;
-            sectionSel.appendChild(opt);
-          }
-        });
-
+        populateSectionFilter(snap.groups || []);
         renderAll(snap.tasks, snap.groups || []);
-        showSnapshotBanner(snap.savedAt);
+        showSnapshotBanner(snap.savedAt, 'limit');
       } else {
-        // No snapshot available
-        renderError(
-          'Monday daily API limit reached and no cached snapshot is available. ' +
-          'Resets at midnight UTC. Open the board directly in Monday.com in the meantime.'
-        );
+        renderError('Monday daily API limit reached and no cached snapshot available. Resets at 8 PM EDT.');
       }
       return;
     }
@@ -464,7 +451,21 @@ async function fetchBoard() {
     renderError(err.message);
   } finally {
     setSpinner(false);
+    // Start the 60s cooldown on the button regardless of success/fail
+    startCooldown();
   }
+}
+
+function populateSectionFilter(groups) {
+  const sectionSel = $('filterSection');
+  const existing   = [...sectionSel.options].map(o => o.value);
+  groups.forEach(g => {
+    if (!existing.includes(g.title)) {
+      const opt = document.createElement('option');
+      opt.value = g.title; opt.textContent = g.title;
+      sectionSel.appendChild(opt);
+    }
+  });
 }
 
 function tryPeople(raw) {
@@ -475,38 +476,37 @@ function tryPeople(raw) {
   } catch { return ''; }
 }
 
-// ── Render all ─────────────────────────────────────────────────
+// ── Render all ────────────────────────────────────────────────
 function renderAll(tasks, groups) {
-  const done       = tasks.filter(t => t.status === 'done').length;
-  const working    = tasks.filter(t => t.status === 'working').length;
-  const stuck      = tasks.filter(t => t.status === 'stuck').length;
-  const notStarted = tasks.filter(t => t.status === 'not_started').length;
-  const total      = tasks.length;
-  const pct        = total ? Math.round(done / total * 100) : 0;
-  const overdueCnt = tasks.filter(t => t.overdue && t.status !== 'done').length;
+  const done        = tasks.filter(t => t.status === 'done').length;
+  const working     = tasks.filter(t => t.status === 'working').length;
+  const notStarted  = tasks.filter(t => t.status === 'not_started').length;
+  const total       = tasks.length;
+  const pct         = total ? Math.round(done / total * 100) : 0;
+  const overdueCnt  = tasks.filter(t => t.overdue && t.status !== 'done').length;
   const highPrioCnt = tasks.filter(t => (t.priority === 'high' || t.priority === 'critical') && t.status !== 'done').length;
 
   animateCount(statCompleted,    done);
   animateCount(statInProgress,   working);
   animateCount(statNotStarted,   notStarted);
-  statPercent.textContent    = pct + '%';
+  statPercent.textContent   = pct + '%';
   animateCount(statOverdue,      overdueCnt);
   animateCount(statHighPriority, highPrioCnt);
 
   const pctOf = n => total ? (n / total * 100).toFixed(1) + '%' : '0%';
-  barCompleted.style.width     = pctOf(done);
-  barInProgress.style.width    = pctOf(working);
-  barNotStarted.style.width    = pctOf(notStarted);
-  barPercent.style.width       = pct + '%';
-  barOverdue.style.width       = total ? (overdueCnt / total * 100).toFixed(1) + '%' : '0%';
-  barHighPriority.style.width  = total ? (highPrioCnt / total * 100).toFixed(1) + '%' : '0%';
+  barCompleted.style.width    = pctOf(done);
+  barInProgress.style.width   = pctOf(working);
+  barNotStarted.style.width   = pctOf(notStarted);
+  barPercent.style.width      = pct + '%';
+  barOverdue.style.width      = total ? (overdueCnt  / total * 100).toFixed(1) + '%' : '0%';
+  barHighPriority.style.width = total ? (highPrioCnt / total * 100).toFixed(1) + '%' : '0%';
 
   renderCharts(tasks, groups);
   applyFiltersAndRender();
   taskCountEl.textContent = total + ' task' + (total !== 1 ? 's' : '');
 }
 
-// ── Animate count ──────────────────────────────────────────────
+// ── Animate count ─────────────────────────────────────────────
 function animateCount(el, target) {
   const start = parseInt(el.textContent) || 0;
   const diff  = target - start;
@@ -520,7 +520,7 @@ function animateCount(el, target) {
   requestAnimationFrame(tick);
 }
 
-// ── Charts ─────────────────────────────────────────────────────
+// ── Charts ────────────────────────────────────────────────────
 function renderCharts(tasks, groups) {
   renderDonut(tasks);
   renderSectionBars(groups, tasks);
@@ -530,21 +530,20 @@ function renderCharts(tasks, groups) {
 function getChartColors() {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   return {
-    text:   isDark ? '#8b91a8' : '#555b72',
-    grid:   isDark ? '#2e3347' : '#e2e5ef',
-    bg:     isDark ? '#22263a' : '#f0f2fa'
+    text: isDark ? '#8b91a8' : '#555b72',
+    grid: isDark ? '#2e3347' : '#e2e5ef'
   };
 }
 
 function renderDonut(tasks) {
-  const done       = tasks.filter(t => t.status === 'done').length;
-  const working    = tasks.filter(t => t.status === 'working').length;
-  const stuck      = tasks.filter(t => t.status === 'stuck').length;
-  const ns         = tasks.filter(t => t.status === 'not_started').length;
-  const ctx        = $('donutChart').getContext('2d');
-  const colors     = ['#22c55e','#f59e0b','#ef4444','#6b7280'];
-  const labels     = ['Completed','In Progress','Stuck','Not Started'];
-  const vals       = [done, working, stuck, ns];
+  const done    = tasks.filter(t => t.status === 'done').length;
+  const working = tasks.filter(t => t.status === 'working').length;
+  const stuck   = tasks.filter(t => t.status === 'stuck').length;
+  const ns      = tasks.filter(t => t.status === 'not_started').length;
+  const ctx     = $('donutChart').getContext('2d');
+  const colors  = ['#22c55e','#f59e0b','#ef4444','#6b7280'];
+  const labels  = ['Completed','In Progress','Stuck','Not Started'];
+  const vals    = [done, working, stuck, ns];
   if (donutChartInstance) donutChartInstance.destroy();
   donutChartInstance = new Chart(ctx, {
     type: 'doughnut',
@@ -569,15 +568,14 @@ function renderSectionBars(groups, tasks) {
 }
 
 function renderLineChart(tasks) {
-  const now     = new Date();
-  const months  = [];
-  const counts  = [];
+  const now    = new Date();
+  const months = [];
+  const counts = [];
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }));
     counts.push(0);
   }
-
   tasks.filter(t => t.status === 'done' && t.dueDate).forEach(t => {
     const d = new Date(t.dueDate);
     for (let i = 0; i < 6; i++) {
@@ -586,7 +584,6 @@ function renderLineChart(tasks) {
       if (d >= base && d <= end) { counts[i]++; break; }
     }
   });
-
   const cc  = getChartColors();
   const ctx = $('lineChart').getContext('2d');
   if (lineChartInstance) lineChartInstance.destroy();
@@ -607,8 +604,7 @@ function renderLineChart(tasks) {
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ` ${c.parsed.y} tasks completed` } } },
       scales: {
         x: { ticks: { color: cc.text, font: { size: 11 } }, grid: { color: cc.grid } },
@@ -618,16 +614,12 @@ function renderLineChart(tasks) {
   });
 }
 
-// ── Filters ────────────────────────────────────────────────────
-[filterStatus, filterPriority, filterSection, filterDue].forEach(el => {
-  el.addEventListener('change', applyFiltersAndRender);
-});
-
+// ── Filters ───────────────────────────────────────────────────
+[filterStatus, filterPriority, filterSection, filterDue].forEach(el =>
+  el.addEventListener('change', applyFiltersAndRender)
+);
 clearFilters.addEventListener('click', () => {
-  filterStatus.value   = 'all';
-  filterPriority.value = 'all';
-  filterSection.value  = 'all';
-  filterDue.value      = 'all';
+  filterStatus.value = filterPriority.value = filterSection.value = filterDue.value = 'all';
   applyFiltersAndRender();
 });
 
@@ -638,22 +630,20 @@ function applyFiltersAndRender() {
   const fDue      = filterDue.value;
 
   let filtered = allTasksGlobal;
-
-  if (fStatus !== 'all')   filtered = filtered.filter(t => t.status === fStatus);
+  if (fStatus   !== 'all') filtered = filtered.filter(t => t.status   === fStatus);
   if (fPriority !== 'all') filtered = filtered.filter(t => t.priority === fPriority);
-  if (fSection !== 'all')  filtered = filtered.filter(t => t.section === fSection);
-  if (fDue === 'overdue')    filtered = filtered.filter(t => t.overdue && t.status !== 'done');
-  if (fDue === 'this_week')  filtered = filtered.filter(t => isThisWeek(t.dueDate));
-  if (fDue === 'no_date')    filtered = filtered.filter(t => !t.dueDate);
+  if (fSection  !== 'all') filtered = filtered.filter(t => t.section  === fSection);
+  if (fDue === 'overdue')   filtered = filtered.filter(t => t.overdue && t.status !== 'done');
+  if (fDue === 'this_week') filtered = filtered.filter(t => isThisWeek(t.dueDate));
+  if (fDue === 'no_date')   filtered = filtered.filter(t => !t.dueDate);
 
   const isFiltered = fStatus !== 'all' || fPriority !== 'all' || fSection !== 'all' || fDue !== 'all';
   filterResult.textContent = isFiltered ? `Showing ${filtered.length} of ${allTasksGlobal.length} tasks` : '';
-
   renderTable(filtered);
   taskCountEl.textContent = filtered.length + ' task' + (filtered.length !== 1 ? 's' : '');
 }
 
-// ── Priority badges ────────────────────────────────────────────
+// ── Priority badges ───────────────────────────────────────────
 const PRIO_MAP = {
   critical: ['prio-critical', '🚨 Critical'],
   high:     ['prio-high',     '🔴 High'],
@@ -661,7 +651,7 @@ const PRIO_MAP = {
   low:      ['prio-low',      '🟢 Low']
 };
 
-// ── Status badges ──────────────────────────────────────────────
+// ── Status badges ─────────────────────────────────────────────
 const BADGES = {
   done:        ['badge-done',        '✓ Done'],
   working:     ['badge-working',     '⚡ In Progress'],
@@ -669,7 +659,7 @@ const BADGES = {
   not_started: ['badge-not-started', '○ Not Started']
 };
 
-// ── Avatar initials ────────────────────────────────────────────
+// ── Avatar initials ───────────────────────────────────────────
 const AVATAR_COLORS = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#8b5cf6','#14b8a6'];
 const avatarColorCache = {};
 
@@ -684,35 +674,29 @@ function getAvatarColor(name) {
 
 function renderAvatar(assignee) {
   if (!assignee || assignee === '—') return '<span class="avatar-empty">—</span>';
-  const names = assignee.split(',').map(s => s.trim()).filter(Boolean);
-  return names.slice(0, 2).map(name => {
+  return assignee.split(',').map(s => s.trim()).filter(Boolean).slice(0, 2).map(name => {
     const initials = name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-    const color    = getAvatarColor(name);
-    return `<span class="avatar" style="background:${color}" title="${h(name)}">${initials}</span>`;
+    return `<span class="avatar" style="background:${getAvatarColor(name)}" title="${h(name)}">${initials}</span>`;
   }).join('');
 }
 
-// ── Table render ───────────────────────────────────────────────
+// ── Table render ──────────────────────────────────────────────
 function renderTable(tasks) {
   if (!tasks.length) {
     tasksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="empty-icon">🔍</div>No tasks match your filters.</td></tr>`;
     return;
   }
-
   tasksTableBody.innerHTML = tasks.map(t => {
-    const [sCls, sLbl]  = BADGES[t.status] || BADGES.not_started;
-    const [pCls, pLbl]  = PRIO_MAP[t.priority] || PRIO_MAP.medium;
-    const dueCls  = (t.overdue && t.status !== 'done') ? 'due-overdue' : (isThisWeek(t.dueDate) ? 'due-soon' : '');
-    const dueStr  = t.dueDate ? formatDate(t.dueDate) : '—';
+    const [sCls, sLbl] = BADGES[t.status]   || BADGES.not_started;
+    const [pCls, pLbl] = PRIO_MAP[t.priority] || PRIO_MAP.medium;
+    const dueCls       = (t.overdue && t.status !== 'done') ? 'due-overdue' : (isThisWeek(t.dueDate) ? 'due-soon' : '');
+    const dueStr       = t.dueDate ? formatDate(t.dueDate) : '—';
     const overdueBadge = (t.overdue && t.status !== 'done') ? ' <span class="badge-overdue">⚠ Overdue</span>' : '';
-
     return `
     <tr class="task-row" data-id="${t.id}">
-      <td class="expand-cell">
-        <button class="expand-btn" aria-label="Expand" data-id="${t.id}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-      </td>
+      <td class="expand-cell"><button class="expand-btn" aria-label="Expand" data-id="${t.id}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </button></td>
       <td class="task-name-cell">${h(t.name)}</td>
       <td><span class="section-tag">${h(t.section)}</span></td>
       <td><span class="badge ${pCls}">${pLbl}</span></td>
@@ -721,15 +705,13 @@ function renderTable(tasks) {
       <td><div class="avatar-group">${renderAvatar(t.assignee)}</div></td>
     </tr>
     <tr class="task-detail-row" id="detail-${t.id}" style="display:none">
-      <td colspan="7" class="detail-cell">
-        <div class="detail-body">
-          <span class="detail-label">Section:</span> ${h(t.section)}
-          &nbsp;·&nbsp; <span class="detail-label">Priority:</span> ${pLbl}
-          &nbsp;·&nbsp; <span class="detail-label">Status:</span> ${h(t.rawLabel || t.status)}
-          &nbsp;·&nbsp; <span class="detail-label">Due:</span> ${dueStr}
-          &nbsp;·&nbsp; <span class="detail-label">Assigned:</span> ${h(t.assignee)}
-        </div>
-      </td>
+      <td colspan="7" class="detail-cell"><div class="detail-body">
+        <span class="detail-label">Section:</span> ${h(t.section)}
+        &nbsp;·&nbsp;<span class="detail-label">Priority:</span> ${pLbl}
+        &nbsp;·&nbsp;<span class="detail-label">Status:</span> ${h(t.rawLabel || t.status)}
+        &nbsp;·&nbsp;<span class="detail-label">Due:</span> ${dueStr}
+        &nbsp;·&nbsp;<span class="detail-label">Assigned:</span> ${h(t.assignee)}
+      </div></td>
     </tr>`;
   }).join('');
 
@@ -746,12 +728,12 @@ function renderTable(tasks) {
   });
 }
 
-// ── Empty / Error states ───────────────────────────────────────
+// ── Empty / Error states ──────────────────────────────────────
 function renderNoToken() {
   tasksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state">
     <div class="empty-icon">🔑</div>
     <strong>No API token connected</strong><br>
-    <span>Click the <strong>⚙️ Settings</strong> button in the top right to paste your Monday API token and load your SEO board.</span>
+    <span>Click the <strong>⚙️ Settings</strong> button to paste your Monday API token.</span>
   </td></tr>`;
 }
 
@@ -768,44 +750,49 @@ function h(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── CSV export ─────────────────────────────────────────────────
+// ── CSV export ────────────────────────────────────────────────
 exportBtn.addEventListener('click', () => {
   const tasks = window.__msdTasks || [];
   if (!tasks.length) { alert('No data to export yet.'); return; }
   const rows = [['Task Name','Section','Priority','Status (Monday)','Classified','Due Date','Overdue','Assigned To'],
-    ...tasks.map(t => [t.name, t.section, t.priority, t.rawLabel, t.status, t.dueDate || '', t.overdue ? 'Yes' : 'No', t.assignee])];
-  const csv  = rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
-  const a    = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(new Blob([csv], { type: 'text/csv' })),
+    ...tasks.map(t => [t.name, t.section, t.priority, t.rawLabel, t.status, t.dueDate||'', t.overdue?'Yes':'No', t.assignee])];
+  const csv = rows.map(r => r.map(v => '"' + String(v).replace(/"/g,'""') + '"').join(',')).join('\n');
+  Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv], {type:'text/csv'})),
     download: 'msd-seo-audit.csv'
-  });
-  a.click();
+  }).click();
 });
 
-// ── Refresh + init ─────────────────────────────────────────────
+// ── Manual refresh button only — NO auto-refresh timer ────────
 refreshBtn.addEventListener('click', fetchBoard);
 
+// ── Init on page load ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  const snap = loadSnapshot();
+
   if (getToken()) {
-    startAutoRefresh();
-    fetchBoard();
-  } else {
-    // Even without a token, try to show the last snapshot
-    const snap = loadSnapshot();
-    if (snap && snap.tasks && snap.tasks.length) {
-      allTasksGlobal  = snap.tasks;
-      allGroupsGlobal = snap.groups || [];
+    if (snap?.tasks?.length && snapshotIsFresh(snap)) {
+      // Fresh snapshot available (< 1 hour old) — show it instantly, skip API call
+      allTasksGlobal    = snap.tasks;
+      allGroupsGlobal   = snap.groups || [];
       window.__msdTasks = snap.tasks;
-
-      const sectionSel = $('filterSection');
-      (snap.groups || []).forEach(g => {
-        const opt = document.createElement('option');
-        opt.value = g.title; opt.textContent = g.title;
-        sectionSel.appendChild(opt);
-      });
-
+      populateSectionFilter(snap.groups || []);
       renderAll(snap.tasks, snap.groups || []);
-      showSnapshotBanner(snap.savedAt);
+      showSnapshotBanner(snap.savedAt, 'fresh');
+      setSyncState('live', 'Cached');
+    } else {
+      // No snapshot or stale — fetch live
+      fetchBoard();
+    }
+  } else {
+    // No token — show snapshot if available so the board isn't blank
+    if (snap?.tasks?.length) {
+      allTasksGlobal    = snap.tasks;
+      allGroupsGlobal   = snap.groups || [];
+      window.__msdTasks = snap.tasks;
+      populateSectionFilter(snap.groups || []);
+      renderAll(snap.tasks, snap.groups || []);
+      showSnapshotBanner(snap.savedAt, 'fresh');
       setSyncState('error', 'No token — cached view');
     } else {
       setSyncState('error', 'No token');
