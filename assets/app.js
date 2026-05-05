@@ -5,7 +5,7 @@
 
 const BOARD_ID   = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
-const AUTO_REFRESH_MS = 60000;
+const AUTO_REFRESH_MS = 300000; // 5 minutes
 
 // ── Status classification ────────────────────────────────────
 const DONE_LABELS    = ['done','complete','completed','finished','closed'];
@@ -363,14 +363,26 @@ async function fetchBoard() {
     window.__msdTasks = allTasks;
     setSyncState('live', 'Synced');
 
-  } catch (err) {
-    console.error('[MSD] Fetch error:', err.message);
-    setSyncState('error', 'Sync failed');
-    renderError(err.message);
-  } finally {
-    setSpinner(false);
-  }
-}
+   } catch (err) {
+     console.error('[MSD] Fetch error:', err.message);
+   
+     const msg = err.message || '';
+     const isDailyLimit =
+       msg.includes('Daily limit exceeded') ||
+       msg.includes('DAILY_LIMIT_EXCEEDED');
+   
+     if (isDailyLimit) {
+       stopAutoRefresh();
+       setSyncState('error', 'Daily limit reached');
+       renderError('Monday daily API limit reached. Resets at midnight UTC.');
+       return;
+     }
+   
+     setSyncState('error', 'Sync failed');
+     renderError(err.message);
+   } finally {
+     setSpinner(false);
+   }
 
 function tryPeople(raw) {
   try {
