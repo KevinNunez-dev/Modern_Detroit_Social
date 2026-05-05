@@ -6,6 +6,7 @@
 const BOARD_ID   = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
 const AUTO_REFRESH_MS = 300000; // 5 minutes
+const SNAPSHOT_KEY    = 'msd_snapshot';  // sessionStorage key
 
 // ── Status classification ────────────────────────────────────
 const DONE_LABELS    = ['done','complete','completed','finished','closed'];
@@ -97,6 +98,58 @@ let autoRefreshTimer   = null;
 let allTasksGlobal     = [];
 let allGroupsGlobal    = [];
 
+// ── Snapshot helpers ───────────────────────────────────────────
+function saveSnapshot(tasks, groups) {
+  try {
+    const payload = {
+      tasks,
+      groups,
+      savedAt: new Date().toISOString()
+    };
+    sessionStorage.setItem(SNAPSHOT_KEY, JSON.stringify(payload));
+  } catch (e) {
+    console.warn('[MSD] Could not save snapshot:', e.message);
+  }
+}
+
+function loadSnapshot() {
+  try {
+    const raw = sessionStorage.getItem(SNAPSHOT_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function showSnapshotBanner(savedAt) {
+  let banner = $('snapshotBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'snapshotBanner';
+    banner.style.cssText = [
+      'position:fixed', 'top:60px', 'left:50%', 'transform:translateX(-50%)',
+      'background:#f59e0b', 'color:#1c1a14', 'padding:8px 18px',
+      'border-radius:8px', 'font-size:13px', 'font-weight:600',
+      'box-shadow:0 4px 16px rgba(0,0,0,0.18)', 'z-index:9999',
+      'display:flex', 'align-items:center', 'gap:10px', 'max-width:90vw'
+    ].join(';');
+    document.body.appendChild(banner);
+  }
+  const timeStr = savedAt
+    ? new Date(savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+    : 'unknown time';
+  banner.innerHTML = `
+    <span>📦 Viewing cached data from ${timeStr} — Monday daily API limit reached. Resets at midnight UTC.</span>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0;color:#1c1a14" aria-label="Dismiss">✕</button>
+  `;
+}
+
+function hideSnapshotBanner() {
+  const b = $('snapshotBanner');
+  if (b) b.remove();
+}
+
 // ── Theme Toggle ───────────────────────────────────────────────
 const SUN_SVG  = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
 const MOON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
@@ -108,7 +161,6 @@ function getStoredTheme() {
 }
 
 function getCurrentTheme() {
-  // if nothing stored, default to light
   return document.documentElement.getAttribute('data-theme') ||
          getStoredTheme() ||
          'light';
@@ -118,12 +170,9 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem(THEME_KEY, theme);
   themeIcon.innerHTML = theme === 'dark' ? MOON_SVG : SUN_SVG;
-
-  // Re-render charts with new colors if data exists
   if (allTasksGlobal.length) renderCharts(allTasksGlobal, allGroupsGlobal);
 }
 
-// initialize theme on load
 applyTheme(getCurrentTheme());
 
 themeToggle.addEventListener('click', () => {
@@ -348,6 +397,10 @@ async function fetchBoard() {
     allTasksGlobal  = allTasks;
     allGroupsGlobal = groups;
 
+    // Save snapshot on every successful fetch
+    saveSnapshot(allTasks, groups);
+    hideSnapshotBanner();
+
     // Populate section filter
     const sectionSel = $('filterSection');
     const existing   = [...sectionSel.options].map(o => o.value);
@@ -363,26 +416,56 @@ async function fetchBoard() {
     window.__msdTasks = allTasks;
     setSyncState('live', 'Synced');
 
-   } catch (err) {
-     console.error('[MSD] Fetch error:', err.message);
-   
-     const msg = err.message || '';
-     const isDailyLimit =
-       msg.includes('Daily limit exceeded') ||
-       msg.includes('DAILY_LIMIT_EXCEEDED');
-   
-     if (isDailyLimit) {
-       stopAutoRefresh();
-       setSyncState('error', 'Daily limit reached');
-       renderError('Monday daily API limit reached. Resets at midnight UTC.');
-       return;
-     }
-   
-     setSyncState('error', 'Sync failed');
-     renderError(err.message);
-   } finally {
-     setSpinner(false);
-   }
+  } catch (err) {
+    console.error('[MSD] Fetch error:', err.message);
+
+    const msg = err.message || '';
+    const isDailyLimit =
+      msg.includes('Daily limit exceeded') ||
+      msg.includes('DAILY_LIMIT_EXCEEDED') ||
+      msg.toLowerCase().includes('rate limit') ||
+      msg.toLowerCase().includes('complexity limit');
+
+    if (isDailyLimit) {
+      stopAutoRefresh();
+      setSyncState('error', 'Daily limit — cached view');
+
+      // Try to load snapshot
+      const snap = loadSnapshot();
+      if (snap && snap.tasks && snap.tasks.length) {
+        allTasksGlobal  = snap.tasks;
+        allGroupsGlobal = snap.groups || [];
+        window.__msdTasks = snap.tasks;
+
+        // Re-populate section filter from snapshot
+        const sectionSel = $('filterSection');
+        const existing   = [...sectionSel.options].map(o => o.value);
+        (snap.groups || []).forEach(g => {
+          if (!existing.includes(g.title)) {
+            const opt = document.createElement('option');
+            opt.value = g.title; opt.textContent = g.title;
+            sectionSel.appendChild(opt);
+          }
+        });
+
+        renderAll(snap.tasks, snap.groups || []);
+        showSnapshotBanner(snap.savedAt);
+      } else {
+        // No snapshot available
+        renderError(
+          'Monday daily API limit reached and no cached snapshot is available. ' +
+          'Resets at midnight UTC. Open the board directly in Monday.com in the meantime.'
+        );
+      }
+      return;
+    }
+
+    setSyncState('error', 'Sync failed');
+    renderError(err.message);
+  } finally {
+    setSpinner(false);
+  }
+}
 
 function tryPeople(raw) {
   try {
@@ -403,7 +486,6 @@ function renderAll(tasks, groups) {
   const overdueCnt = tasks.filter(t => t.overdue && t.status !== 'done').length;
   const highPrioCnt = tasks.filter(t => (t.priority === 'high' || t.priority === 'critical') && t.status !== 'done').length;
 
-  // Stat cards
   animateCount(statCompleted,    done);
   animateCount(statInProgress,   working);
   animateCount(statNotStarted,   notStarted);
@@ -487,7 +569,6 @@ function renderSectionBars(groups, tasks) {
 }
 
 function renderLineChart(tasks) {
-  // Group completed tasks by month (last 6 months)
   const now     = new Date();
   const months  = [];
   const counts  = [];
@@ -497,7 +578,6 @@ function renderLineChart(tasks) {
     counts.push(0);
   }
 
-  // Use tasks with a due date that are done as a proxy for "completed that month"
   tasks.filter(t => t.status === 'done' && t.dueDate).forEach(t => {
     const d = new Date(t.dueDate);
     for (let i = 0; i < 6; i++) {
@@ -653,7 +733,6 @@ function renderTable(tasks) {
     </tr>`;
   }).join('');
 
-  // Expand/collapse rows
   tasksTableBody.querySelectorAll('.expand-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const id     = btn.dataset.id;
@@ -711,7 +790,26 @@ document.addEventListener('DOMContentLoaded', () => {
     startAutoRefresh();
     fetchBoard();
   } else {
-    setSyncState('error', 'No token');
-    renderNoToken();
+    // Even without a token, try to show the last snapshot
+    const snap = loadSnapshot();
+    if (snap && snap.tasks && snap.tasks.length) {
+      allTasksGlobal  = snap.tasks;
+      allGroupsGlobal = snap.groups || [];
+      window.__msdTasks = snap.tasks;
+
+      const sectionSel = $('filterSection');
+      (snap.groups || []).forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.title; opt.textContent = g.title;
+        sectionSel.appendChild(opt);
+      });
+
+      renderAll(snap.tasks, snap.groups || []);
+      showSnapshotBanner(snap.savedAt);
+      setSyncState('error', 'No token — cached view');
+    } else {
+      setSyncState('error', 'No token');
+      renderNoToken();
+    }
   }
 });
