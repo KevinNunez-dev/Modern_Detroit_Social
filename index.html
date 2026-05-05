@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -33,7 +33,7 @@
     </button>
     <!-- Dark/Light Toggle -->
     <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle light/dark mode">
-      <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg id="themeIcon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
     </button>
     <button class="icon-btn" id="settingsBtn" type="button" aria-label="Settings">
       <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -50,32 +50,32 @@
   <article class="stat-card">
     <p class="stat-label">Completed</p>
     <div class="stat-value" id="statCompleted">0</div>
-    <div class="mini-bar-wrap"><div class="mini-bar" id="barCompleted" style="width:0%;background:#22c55e"></div></div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barCompleted" style="width:0%;background:linear-gradient(90deg,#16b884,#2ee2bf)"></div></div>
   </article>
   <article class="stat-card">
     <p class="stat-label">In Progress</p>
     <div class="stat-value" id="statInProgress">0</div>
-    <div class="mini-bar-wrap"><div class="mini-bar" id="barInProgress" style="width:0%;background:#f59e0b"></div></div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barInProgress" style="width:0%;background:linear-gradient(90deg,#ffb347,#ff8a3d)"></div></div>
   </article>
   <article class="stat-card">
     <p class="stat-label">Not Started</p>
     <div class="stat-value" id="statNotStarted">0</div>
-    <div class="mini-bar-wrap"><div class="mini-bar" id="barNotStarted" style="width:0%;background:#6b7280"></div></div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barNotStarted" style="width:0%;background:#9eb4c5"></div></div>
   </article>
   <article class="stat-card">
     <p class="stat-label">Overall %</p>
     <div class="stat-value" id="statPercent">0%</div>
-    <div class="mini-bar-wrap"><div class="mini-bar" id="barPercent" style="width:0%;background:#6366f1"></div></div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barPercent" style="width:0%;background:linear-gradient(90deg,#1ec8e8,#0f9fcb)"></div></div>
   </article>
   <article class="stat-card">
     <p class="stat-label">Overdue</p>
     <div class="stat-value overdue-val" id="statOverdue">0</div>
-    <div class="mini-bar-wrap"><div class="mini-bar" id="barOverdue" style="width:0%;background:#ef4444"></div></div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barOverdue" style="width:0%;background:#ef5350"></div></div>
   </article>
   <article class="stat-card">
     <p class="stat-label">High Priority</p>
     <div class="stat-value priority-val" id="statHighPriority">0</div>
-    <div class="mini-bar-wrap"><div class="mini-bar" id="barHighPriority" style="width:0%;background:#f97316"></div></div>
+    <div class="mini-bar-wrap"><div class="mini-bar" id="barHighPriority" style="width:0%;background:linear-gradient(90deg,#ffb347,#ff8a3d)"></div></div>
   </article>
 </section>
 
@@ -423,6 +423,27 @@ function toggleViewer(viewerId, btnId) {
     ? '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Close'
     : '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View';
 }
+
+// Theme toggle wired to light/dark
+(function(){
+  const toggle = document.getElementById('themeToggle');
+  const icon   = document.getElementById('themeIcon');
+  const html   = document.documentElement;
+
+  const sunSVG  = '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>';
+  const moonSVG = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+
+  function applyTheme(theme) {
+    html.setAttribute('data-theme', theme);
+    icon.innerHTML = theme === 'dark' ? sunSVG : moonSVG;
+    toggle.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+  }
+
+  toggle.addEventListener('click', function() {
+    const current = html.getAttribute('data-theme') || 'light';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  });
+})();
 </script>
 </body>
 </html>
