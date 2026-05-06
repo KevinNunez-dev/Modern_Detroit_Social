@@ -6,8 +6,8 @@
 const BOARD_ID   = '18407794764';
 const MONDAY_API = 'https://api.monday.com/v2';
 const SNAPSHOT_KEY   = 'msd_snapshot_v2'; // localStorage key — persists across tab closes
-const COOLDOWN_MS    = 60_000;            // 60s minimum between manual syncs
-const SNAPSHOT_TTL   = 3_600_000;         // 1 hour — use cache on load if fresher than this
+const COOLDOWN_MS    = 300_000;            // 5 min minimum between manual syncs (was 60s)
+const SNAPSHOT_TTL   = 86_400_000;        // 24 hours — use cache on load if fresher than this (was 1h)
 
 // ── Status classification ─────────────────────────────────────
 const DONE_LABELS    = ['done','complete','completed','finished','closed'];
@@ -143,7 +143,7 @@ function showSnapshotBanner(savedAt, reason) {
     : 'unknown time';
   const msg = reason === 'limit'
     ? `📦 Cached data from ${timeStr} — Monday daily API limit reached. Resets at 8 PM EDT.`
-    : `📦 Showing cached data from ${timeStr}. Hit ↻ Sync to fetch latest from Monday.`;
+    : `📦 Showing cached data from ${timeStr}. Hit ↻ Refresh to fetch latest from Monday.`;
   banner.innerHTML = `<span>${msg}</span>
     <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0;color:#1c1a14" aria-label="Dismiss">✕</button>`;
 }
@@ -167,7 +167,11 @@ function startCooldown() {
       refreshBtn.innerHTML = originalHTML;
       return;
     }
-    refreshBtn.innerHTML = `<svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> ${remaining}s`;
+    // Show minutes when >= 60s remaining
+    const display = remaining >= 60
+      ? `${Math.ceil(remaining / 60)}m`
+      : `${remaining}s`;
+    refreshBtn.innerHTML = `<svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> ${display}`;
     remaining--;
   };
   tick();
@@ -451,7 +455,7 @@ async function fetchBoard() {
     renderError(err.message);
   } finally {
     setSpinner(false);
-    // Start the 60s cooldown on the button regardless of success/fail
+    // Start the 5-min cooldown on the button regardless of success/fail
     startCooldown();
   }
 }
@@ -772,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (getToken()) {
     if (snap?.tasks?.length && snapshotIsFresh(snap)) {
-      // Fresh snapshot available (< 1 hour old) — show it instantly, skip API call
+      // Fresh snapshot available (< 24h old) — show it instantly, skip API call
       allTasksGlobal    = snap.tasks;
       allGroupsGlobal   = snap.groups || [];
       window.__msdTasks = snap.tasks;
@@ -781,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showSnapshotBanner(snap.savedAt, 'fresh');
       setSyncState('live', 'Cached');
     } else {
-      // No snapshot or stale — fetch live
+      // No snapshot or stale (> 24h) — fetch live
       fetchBoard();
     }
   } else {
