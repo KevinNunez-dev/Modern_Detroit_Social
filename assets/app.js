@@ -4,12 +4,12 @@
    ============================================================= */
 
 const BOARD_ID   = '18407794764';
-const MONDAY_API = 'https://api.monday.com/v2';
-const SNAPSHOT_KEY   = 'msd_snapshot_v2'; // localStorage key — persists across tab closes
-const COOLDOWN_MS    = 300_000;            // 5 min minimum between manual syncs (was 60s)
-const SNAPSHOT_TTL   = 86_400_000;        // 24 hours — use cache on load if fresher than this (was 1h)
+const MONDAY_API = '/api/monday';  // <- Netlify proxy — token lives server-side
+const SNAPSHOT_KEY   = 'msd_snapshot_v2';
+const COOLDOWN_MS    = 300_000;
+const SNAPSHOT_TTL   = 86_400_000;
 
-// ── Status classification ─────────────────────────────────────
+// -- Status classification
 const DONE_LABELS    = ['done','complete','completed','finished','closed'];
 const WORKING_LABELS = ['working on it','in progress','working','started','in review','active'];
 const STUCK_LABELS   = ['stuck','blocked','on hold','waiting','paused'];
@@ -23,7 +23,7 @@ function classify(label) {
   return 'not_started';
 }
 
-// ── Priority classification ───────────────────────────────────
+// -- Priority classification
 const PRIORITY_HIGH     = ['high','urgent','important'];
 const PRIORITY_CRITICAL = ['critical','blocker','must fix','asap'];
 const PRIORITY_LOW      = ['low','minor','nice to have'];
@@ -48,13 +48,7 @@ function extractLabel(col) {
   return '';
 }
 
-// ── Token ─────────────────────────────────────────────────────
-const LS_KEY = 'msd_monday_token';
-function getToken()   { return localStorage.getItem(LS_KEY) || ''; }
-function saveToken(t) { localStorage.setItem(LS_KEY, t.trim()); }
-function clearToken() { localStorage.removeItem(LS_KEY); }
-
-// ── DOM refs ──────────────────────────────────────────────────
+// -- DOM refs
 const $ = id => document.getElementById(id);
 const syncPill         = $('syncPill');
 const syncStatusEl     = $('syncStatus');
@@ -67,9 +61,6 @@ const themeIcon        = $('themeIcon');
 const drawer           = $('settingsDrawer');
 const drawerOverlay    = $('drawerOverlay');
 const drawerCloseBtn   = $('drawerCloseBtn');
-const tokenInput       = $('tokenInput');
-const saveTokenBtn     = $('saveTokenBtn');
-const clearTokenBtn    = $('clearTokenBtn');
 const tasksTableBody   = $('tasksTableBody');
 const taskCountEl      = $('taskCount');
 const sectionBarsEl    = $('sectionBars');
@@ -97,10 +88,10 @@ let donutChartInstance  = null;
 let lineChartInstance   = null;
 let allTasksGlobal      = [];
 let allGroupsGlobal     = [];
-let lastFetchAt         = 0;   // timestamp of last successful API call
+let lastFetchAt         = 0;
 let cooldownTimer       = null;
 
-// ── Snapshot helpers (localStorage — survives tab close) ──────
+// -- Snapshot helpers
 function saveSnapshot(tasks, groups) {
   try {
     localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
@@ -123,7 +114,7 @@ function snapshotIsFresh(snap) {
   return (Date.now() - new Date(snap.savedAt).getTime()) < SNAPSHOT_TTL;
 }
 
-// ── Snapshot / cached-data banner ────────────────────────────
+// -- Snapshot banner
 function showSnapshotBanner(savedAt, reason) {
   let banner = $('snapshotBanner');
   if (!banner) {
@@ -142,22 +133,21 @@ function showSnapshotBanner(savedAt, reason) {
     ? new Date(savedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
     : 'unknown time';
   const msg = reason === 'limit'
-    ? `📦 Cached data from ${timeStr} — Monday daily API limit reached. Resets at 8 PM EDT.`
-    : `📦 Showing cached data from ${timeStr}. Hit ↻ Refresh to fetch latest from Monday.`;
+    ? `Cached data from ${timeStr} — Monday daily API limit reached. Resets at 8 PM EDT.`
+    : `Showing cached data from ${timeStr}. Hit Refresh to fetch latest from Monday.`;
   banner.innerHTML = `<span>${msg}</span>
-    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0;color:#1c1a14" aria-label="Dismiss">✕</button>`;
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:0;color:#1c1a14" aria-label="Dismiss">x</button>`;
 }
 
 function hideSnapshotBanner() {
   const b = $('snapshotBanner'); if (b) b.remove();
 }
 
-// ── Refresh button cooldown ───────────────────────────────────
+// -- Refresh button cooldown
 function startCooldown() {
   if (cooldownTimer) clearInterval(cooldownTimer);
   let remaining = Math.ceil(COOLDOWN_MS / 1000);
   refreshBtn.disabled = true;
-
   const originalHTML = refreshBtn.innerHTML;
   const tick = () => {
     if (remaining <= 0) {
@@ -167,10 +157,7 @@ function startCooldown() {
       refreshBtn.innerHTML = originalHTML;
       return;
     }
-    // Show minutes when >= 60s remaining
-    const display = remaining >= 60
-      ? `${Math.ceil(remaining / 60)}m`
-      : `${remaining}s`;
+    const display = remaining >= 60 ? `${Math.ceil(remaining / 60)}m` : `${remaining}s`;
     refreshBtn.innerHTML = `<svg id="refreshIcon" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> ${display}`;
     remaining--;
   };
@@ -178,7 +165,7 @@ function startCooldown() {
   cooldownTimer = setInterval(tick, 1000);
 }
 
-// ── Theme Toggle ──────────────────────────────────────────────
+// -- Theme Toggle
 const SUN_SVG  = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`;
 const MOON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
 
@@ -198,30 +185,15 @@ themeToggle.addEventListener('click', () => {
   applyTheme(getCurrentTheme() === 'dark' ? 'light' : 'dark');
 });
 
-// ── Drawer ────────────────────────────────────────────────────
+// -- Drawer (kept for future use)
 function openDrawer()  { drawer.classList.add('open');    drawerOverlay.classList.add('open'); }
 function closeDrawer() { drawer.classList.remove('open'); drawerOverlay.classList.remove('open'); }
 
-settingsBtn.addEventListener('click', () => { tokenInput.value = getToken(); openDrawer(); });
-drawerCloseBtn.addEventListener('click', closeDrawer);
-drawerOverlay.addEventListener('click', closeDrawer);
+if (settingsBtn)    settingsBtn.addEventListener('click', openDrawer);
+if (drawerCloseBtn) drawerCloseBtn.addEventListener('click', closeDrawer);
+if (drawerOverlay)  drawerOverlay.addEventListener('click', closeDrawer);
 
-saveTokenBtn.addEventListener('click', () => {
-  const t = tokenInput.value.trim();
-  if (!t) { alert('Paste your Monday API token first.'); return; }
-  saveToken(t);
-  closeDrawer();
-  fetchBoard();
-});
-
-clearTokenBtn.addEventListener('click', () => {
-  clearToken();
-  tokenInput.value = '';
-  setSyncState('error', 'Token cleared');
-  renderNoToken();
-});
-
-// ── Sync pill ─────────────────────────────────────────────────
+// -- Sync pill
 function setSyncState(state, label) {
   syncPill.className = 'sync-pill sync-' + state;
   const t = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
@@ -231,15 +203,11 @@ function setSpinner(on) {
   refreshIcon.style.animation = on ? 'spin 0.8s linear infinite' : '';
 }
 
-// ── GQL helper ────────────────────────────────────────────────
+// -- GQL helper — no Authorization header (handled by proxy)
 function gqlRequest(query, variables = {}) {
   return fetch(MONDAY_API, {
     method: 'POST',
-    headers: {
-      'Content-Type':  'application/json',
-      'Authorization': getToken(),
-      'API-Version':   '2024-01'
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables })
   })
   .then(async res => {
@@ -252,7 +220,7 @@ function gqlRequest(query, variables = {}) {
   });
 }
 
-// ── GraphQL queries ───────────────────────────────────────────
+// -- GraphQL queries
 const GROUPS_QUERY = `
 query Groups($ids: [ID!]!) {
   boards(ids: $ids) {
@@ -288,7 +256,7 @@ async function fetchGroupItems(boardId, groupId) {
   return all;
 }
 
-// ── Column pickers ────────────────────────────────────────────
+// -- Column pickers
 const STATUS_TYPES    = ['status', 'color'];
 const STATUS_KEYWORDS = ['status','stage','completed','complete','task','progress','state','done'];
 
@@ -324,7 +292,7 @@ function extractDate(col) {
   return null;
 }
 
-// ── Due date helpers ──────────────────────────────────────────
+// -- Due date helpers
 function isOverdue(dateStr) {
   if (!dateStr) return false;
   const d = new Date(dateStr);
@@ -343,15 +311,8 @@ function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// ── Main fetch (manual only — no auto-refresh timer) ──────────
+// -- Main fetch (no token check — proxy handles auth)
 async function fetchBoard() {
-  if (!getToken()) {
-    setSyncState('error', 'No token');
-    renderNoToken();
-    return;
-  }
-
-  // Cooldown guard — prevent spamming the API
   const msSinceLast = Date.now() - lastFetchAt;
   if (lastFetchAt > 0 && msSinceLast < COOLDOWN_MS) {
     const wait = Math.ceil((COOLDOWN_MS - msSinceLast) / 1000);
@@ -366,7 +327,7 @@ async function fetchBoard() {
   try {
     const boardData = await gqlRequest(GROUPS_QUERY, { ids: [BOARD_ID] });
     const board     = boardData?.boards?.[0];
-    if (!board) throw new Error('Board not found. Check Board ID and token permissions.');
+    if (!board) throw new Error('Board not found. Check Board ID and proxy config.');
 
     const groups   = board.groups || [];
     const allTasks = [];
@@ -406,21 +367,9 @@ async function fetchBoard() {
     allGroupsGlobal = groups;
     lastFetchAt     = Date.now();
 
-    // Persist snapshot to localStorage
     saveSnapshot(allTasks, groups);
     hideSnapshotBanner();
-
-    // Populate section filter
-    const sectionSel = $('filterSection');
-    const existing   = [...sectionSel.options].map(o => o.value);
-    groups.forEach(g => {
-      if (!existing.includes(g.title)) {
-        const opt = document.createElement('option');
-        opt.value = g.title; opt.textContent = g.title;
-        sectionSel.appendChild(opt);
-      }
-    });
-
+    populateSectionFilter(groups);
     renderAll(allTasks, groups);
     window.__msdTasks = allTasks;
     setSyncState('live', 'Synced');
@@ -455,7 +404,6 @@ async function fetchBoard() {
     renderError(err.message);
   } finally {
     setSpinner(false);
-    // Start the 5-min cooldown on the button regardless of success/fail
     startCooldown();
   }
 }
@@ -480,7 +428,7 @@ function tryPeople(raw) {
   } catch { return ''; }
 }
 
-// ── Render all ────────────────────────────────────────────────
+// -- Render all
 function renderAll(tasks, groups) {
   const done        = tasks.filter(t => t.status === 'done').length;
   const working     = tasks.filter(t => t.status === 'working').length;
@@ -510,7 +458,7 @@ function renderAll(tasks, groups) {
   taskCountEl.textContent = total + ' task' + (total !== 1 ? 's' : '');
 }
 
-// ── Animate count ─────────────────────────────────────────────
+// -- Animate count
 function animateCount(el, target) {
   const start = parseInt(el.textContent) || 0;
   const diff  = target - start;
@@ -524,7 +472,7 @@ function animateCount(el, target) {
   requestAnimationFrame(tick);
 }
 
-// ── Charts ────────────────────────────────────────────────────
+// -- Charts
 function renderCharts(tasks, groups) {
   renderDonut(tasks);
   renderSectionBars(groups, tasks);
@@ -618,7 +566,7 @@ function renderLineChart(tasks) {
   });
 }
 
-// ── Filters ───────────────────────────────────────────────────
+// -- Filters
 [filterStatus, filterPriority, filterSection, filterDue].forEach(el =>
   el.addEventListener('change', applyFiltersAndRender)
 );
@@ -647,23 +595,23 @@ function applyFiltersAndRender() {
   taskCountEl.textContent = filtered.length + ' task' + (filtered.length !== 1 ? 's' : '');
 }
 
-// ── Priority badges ───────────────────────────────────────────
+// -- Priority badges
 const PRIO_MAP = {
-  critical: ['prio-critical', '🚨 Critical'],
-  high:     ['prio-high',     '🔴 High'],
-  medium:   ['prio-medium',   '🟡 Medium'],
-  low:      ['prio-low',      '🟢 Low']
+  critical: ['prio-critical', 'Critical'],
+  high:     ['prio-high',     'High'],
+  medium:   ['prio-medium',   'Medium'],
+  low:      ['prio-low',      'Low']
 };
 
-// ── Status badges ─────────────────────────────────────────────
+// -- Status badges
 const BADGES = {
-  done:        ['badge-done',        '✓ Done'],
-  working:     ['badge-working',     '⚡ In Progress'],
-  stuck:       ['badge-stuck',       '🚫 Stuck'],
-  not_started: ['badge-not-started', '○ Not Started']
+  done:        ['badge-done',        'Done'],
+  working:     ['badge-working',     'In Progress'],
+  stuck:       ['badge-stuck',       'Stuck'],
+  not_started: ['badge-not-started', 'Not Started']
 };
 
-// ── Avatar initials ───────────────────────────────────────────
+// -- Avatar initials
 const AVATAR_COLORS = ['#6366f1','#22c55e','#f59e0b','#ef4444','#06b6d4','#ec4899','#8b5cf6','#14b8a6'];
 const avatarColorCache = {};
 
@@ -684,18 +632,18 @@ function renderAvatar(assignee) {
   }).join('');
 }
 
-// ── Table render ──────────────────────────────────────────────
+// -- Table render
 function renderTable(tasks) {
   if (!tasks.length) {
-    tasksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="empty-icon">🔍</div>No tasks match your filters.</td></tr>`;
+    tasksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state"><div class="empty-icon">No tasks match your filters.</div></td></tr>`;
     return;
   }
   tasksTableBody.innerHTML = tasks.map(t => {
-    const [sCls, sLbl] = BADGES[t.status]   || BADGES.not_started;
+    const [sCls, sLbl] = BADGES[t.status]    || BADGES.not_started;
     const [pCls, pLbl] = PRIO_MAP[t.priority] || PRIO_MAP.medium;
     const dueCls       = (t.overdue && t.status !== 'done') ? 'due-overdue' : (isThisWeek(t.dueDate) ? 'due-soon' : '');
     const dueStr       = t.dueDate ? formatDate(t.dueDate) : '—';
-    const overdueBadge = (t.overdue && t.status !== 'done') ? ' <span class="badge-overdue">⚠ Overdue</span>' : '';
+    const overdueBadge = (t.overdue && t.status !== 'done') ? ' <span class="badge-overdue">Overdue</span>' : '';
     return `
     <tr class="task-row" data-id="${t.id}">
       <td class="expand-cell"><button class="expand-btn" aria-label="Expand" data-id="${t.id}">
@@ -732,21 +680,13 @@ function renderTable(tasks) {
   });
 }
 
-// ── Empty / Error states ──────────────────────────────────────
-function renderNoToken() {
-  tasksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state">
-    <div class="empty-icon">🔑</div>
-    <strong>No API token connected</strong><br>
-    <span>Click the <strong>⚙️ Settings</strong> button to paste your Monday API token.</span>
-  </td></tr>`;
-}
-
+// -- Empty / Error states
 function renderError(msg) {
   tasksTableBody.innerHTML = `<tr><td colspan="7" class="empty-state error-state">
-    <div class="empty-icon">⚠️</div>
+    <div class="empty-icon">!</div>
     <strong>Sync Error</strong><br>
     <code style="font-size:11px;word-break:break-all;display:block;margin:8px 0;">${h(msg)}</code>
-    <small>Open DevTools → Console (F12) for details</small>
+    <small>Open DevTools Console (F12) for details</small>
   </td></tr>`;
 }
 
@@ -754,7 +694,7 @@ function h(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── CSV export ────────────────────────────────────────────────
+// -- CSV export
 exportBtn.addEventListener('click', () => {
   const tasks = window.__msdTasks || [];
   if (!tasks.length) { alert('No data to export yet.'); return; }
@@ -767,40 +707,21 @@ exportBtn.addEventListener('click', () => {
   }).click();
 });
 
-// ── Manual refresh button only — NO auto-refresh timer ────────
+// -- Manual refresh
 refreshBtn.addEventListener('click', fetchBoard);
 
-// ── Init on page load ─────────────────────────────────────────
+// -- Init on page load
 document.addEventListener('DOMContentLoaded', () => {
   const snap = loadSnapshot();
-
-  if (getToken()) {
-    if (snap?.tasks?.length && snapshotIsFresh(snap)) {
-      // Fresh snapshot available (< 24h old) — show it instantly, skip API call
-      allTasksGlobal    = snap.tasks;
-      allGroupsGlobal   = snap.groups || [];
-      window.__msdTasks = snap.tasks;
-      populateSectionFilter(snap.groups || []);
-      renderAll(snap.tasks, snap.groups || []);
-      showSnapshotBanner(snap.savedAt, 'fresh');
-      setSyncState('live', 'Cached');
-    } else {
-      // No snapshot or stale (> 24h) — fetch live
-      fetchBoard();
-    }
+  if (snap?.tasks?.length && snapshotIsFresh(snap)) {
+    allTasksGlobal    = snap.tasks;
+    allGroupsGlobal   = snap.groups || [];
+    window.__msdTasks = snap.tasks;
+    populateSectionFilter(snap.groups || []);
+    renderAll(snap.tasks, snap.groups || []);
+    showSnapshotBanner(snap.savedAt, 'fresh');
+    setSyncState('live', 'Cached');
   } else {
-    // No token — show snapshot if available so the board isn't blank
-    if (snap?.tasks?.length) {
-      allTasksGlobal    = snap.tasks;
-      allGroupsGlobal   = snap.groups || [];
-      window.__msdTasks = snap.tasks;
-      populateSectionFilter(snap.groups || []);
-      renderAll(snap.tasks, snap.groups || []);
-      showSnapshotBanner(snap.savedAt, 'fresh');
-      setSyncState('error', 'No token — cached view');
-    } else {
-      setSyncState('error', 'No token');
-      renderNoToken();
-    }
+    fetchBoard();
   }
 });
