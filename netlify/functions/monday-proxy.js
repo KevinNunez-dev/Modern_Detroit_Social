@@ -9,7 +9,7 @@ export default async (req) => {
     headers: {
       'Content-Type':  'application/json',
       'Authorization': token,
-      'API-Version':   '2024-01'
+      'API-Version':   '2024-01' 
     },
     body
   });
